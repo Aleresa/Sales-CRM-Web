@@ -1,6 +1,6 @@
 "use strict";
 function renderGroups() {
- const all=groups().map(summarizeGroup);
+ const all=groups().map(summarizeGroup).filter(g=>g.members.length>0||!(groups().find(source=>source.id===g.id)?.clientIds||[]).length);
  const needle=search.toLocaleLowerCase("ru");
  const list=all.filter(g=>(g.name+" "+g.members.map(c=>c.name).join(" ")).toLocaleLowerCase("ru").includes(needle))
   .sort((a,b)=>n(b.current_revenue)-n(a.current_revenue));
@@ -47,6 +47,7 @@ function openGroup(id) {
  +available.map(c=>'<option value="'+attr(c.id)+'">'+h(c.name)+'</option>').join("")+'</select>'
  +'<button type="button" class="small-btn group-add" id="group-add-member"'+(available.length?"":" disabled")+'>＋ Добавить</button>'
  +'<form id="group-rename-form" data-id="'+attr(group.id)+'" class="group-rename"><label class="field">Название группы<input name="name" maxlength="90" required value="'+attr(group.name)+'"></label><button class="small-btn" type="submit">Переименовать</button></form>'
+ +'<button type="button" class="group-delete" id="group-exclude">Убрать закрывшегося клиента из CRM (все юрлица)</button>'
  +'<button class="group-delete" id="group-delete" type="button">Удалить объединение (без удаления юрлиц)</button>';
  document.getElementById("close-modal").addEventListener("click",()=>modal.hidden=true);
 }
@@ -108,6 +109,7 @@ document.getElementById("modal").addEventListener("click",event=>{
  if(button.dataset.openLegal){openClient(button.dataset.openLegal);return;}
  if(button.dataset.openGroup){openGroup(button.dataset.openGroup);return;}
  const id=modal.dataset.groupId;if(!id)return;
+ if(button.id==="group-exclude"){crmExcludeGroup(id);return;}
  if(button.dataset.removeMember){updateMember(id,button.dataset.removeMember,false);return;}
  if(button.id==="group-add-member"){
   const sel=document.getElementById("group-member-select");
