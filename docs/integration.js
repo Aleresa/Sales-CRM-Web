@@ -44,11 +44,13 @@ function renderIntegration() {
     'Выполни функции <code>testConnections</code>, <code>syncMoySklad</code>, затем <code>installDailyTrigger</code>.</p>' +
     '<p class="note">GitHub Actions из-за блокировки биллинга не используется. ' +
     'Токены не вводятся на этом сайте и не публикуются в коде. При первом успешном запуске появится дата синхронизации.</p></section>';
+  const scopeLabel=msSync.counterparty_group ? "Продажи группы «"+h(msSync.counterparty_group)+"» · "+fmt(msSync.group_client_count)+" контрагентов" : "Период до включения фильтра по группе: может содержать всех контрагентов";
   const records = Object.entries(msSync.salesByMonth).sort((a,b)=>b[0].localeCompare(a[0]));
   const moneySince = records.reduce((v,[,r])=>v+n(r.revenue),0);
   const knownNames = new Set((insights?.clients||[]).map(x=>String(x[0]).toLocaleLowerCase("ru")));
   const unmatched = msSync.salesByClient.filter(c=>!knownNames.has(String(c.name).toLocaleLowerCase("ru")));
   return title +
+    '<p class="note">'+scopeLabel+'. Остатки и ассортимент — по всем доступным складам аккаунта.</p>' +
     '<section class="metric-grid">' +
     metric("Последнее обновление",msDate(msSync.as_of),"↻","Не потоковые данные, а снимок") +
     metric("Свободных SKU",fmt(msSync.stock.filter(x=>n(x[1])>0).length),"▤","По всем складам") +
