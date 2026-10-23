@@ -250,16 +250,29 @@ function clientRowDetails(c){
  return {members,statuses,priority:priorities[0]||"",contact:contacts[0]||"",
    mixed:statuses.length>1,group:Array.isArray(c.members)};
 }
+function recentSalesByClientName(){
+ const map=new Map();
+ for(const entry of (typeof msSync!=="undefined"&&msSync?.salesByClient||[])){
+  const key=String(entry.name||"").trim().toLocaleLowerCase("ru");
+  if(key)map.set(key,(map.get(key)||0)+n(entry.revenue));
+ }
+ return map;
+}
+function recentSalesForMembers(members,salesMap){
+ const map=salesMap||recentSalesByClientName();
+ return members.reduce((total,member)=>
+  total+(map.get(String(member.name||"").trim().toLocaleLowerCase("ru"))||0),0);
+}
 function compareClientRows(a,b){
  const k=clientSortKey, dir=clientSortDirection==="asc"?1:-1;
  const av=a.client,bv=b.client,ai=a.info,bi=b.info;
- const numValue=x=>({
+ const numValue=(x,info)=>({
    previous:n(x.previous_revenue),current:n(x.current_revenue),
    delta:n(x.current_revenue)-n(x.previous_revenue),
-   orders:n(x.orders_current)
+   orders:n(x.orders_current),recent:recentSalesForMembers(info.members)
  })[k];
  let result=0;
- if(["previous","current","delta","orders"].includes(k))result=numValue(av)-numValue(bv);
+ if(["previous","current","delta","orders","recent"].includes(k))result=numValue(av,ai)-numValue(bv,bi);
  else if(k==="secondary"){
   if(clientView==="grouped")result=ai.members.length-bi.members.length;
   else result=(groupForClient(av.id)?.name||"").localeCompare(groupForClient(bv.id)?.name||"","ru");
@@ -296,6 +309,7 @@ function renderClients(){
  const byGroup=clientView==="grouped";
  const needle=search.trim().toLocaleLowerCase("ru");
  const all=(byGroup?portfolio():customers()).map(client=>({client,info:clientRowDetails(client)}));
+ const newSalesMap=recentSalesByClientName();
  const items=all.filter(({client:c,info})=>{
   const matchesSearch=!needle||[
     c.name,...info.members.flatMap(m=>[m.name,m.category||"",m.status||"",m.priority||""]),
@@ -328,10 +342,12 @@ function renderClients(){
    ? '<span class="'+(isGroup?"status":"tiny")+'">'+(isGroup?memberCount+' юрлиц':'1 юрлицо')+'</span>'
    : (group?'<span class="status">'+h(group.name)+'</span>':'<span class="tiny">—</span>');
   const priority=info.priority?priorityBadge(info.priority):'<span class="tiny">—</span>';
+  const newRevenue=recentSalesForMembers(info.members,newSalesMap);
   return '<tr class="clickable" data-action="'+(isGroup?"group":"client")+'" data-id="'+attr(c.id)+'">'
     +'<td class="long"><b>'+h(c.name)+'</b><div class="tiny client-subtitle">'+h(details)+'</div></td>'
     +'<td>'+secondary+'</td>'
     +'<td>'+money(c.previous_revenue)+'</td><td>'+money(c.current_revenue)+'</td>'
+    +'<td>'+(newRevenue?'<b class="gain">'+money(newRevenue)+'</b>':'<span class="tiny">—</span>')+'</td>'
     +'<td class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</td>'
     +'<td>'+fmt(c.orders_current)+'</td><td>'+clientStatusCell(info)+'</td><td>'+priority+'</td>'
     +'<td>'+h(dateOut(info.contact))+'</td></tr>';
@@ -349,12 +365,13 @@ function renderClients(){
  +'<section class="panel"><div class="table-wrap"><table class="data-table client-table">'
  +'<thead><tr>'+clientSortHeading(byGroup?"Реальный клиент":"Контрагент","name")
  +clientSortHeading(byGroup?"Юрлиц":"Группа клиентов","secondary")
- +clientSortHeading("Отгрузки 2025","previous")+clientSortHeading("Отгрузки 2026","current")
+ +clientSortHeading("Янв–сен 2025","previous")+clientSortHeading("Янв–сен 2026","current")
+ +clientSortHeading("С 23.10 · МойСклад","recent")
  +clientSortHeading("Изменение","delta")+clientSortHeading("Заказов 2026","orders")
  +clientSortHeading("Статус","status")+clientSortHeading("Приоритет","priority")
  +clientSortHeading("Контакт","contact")+'</tr></thead>'
- +'<tbody>'+(items.length?rows:'<tr><td colspan="9">'+empty("Ничего не найдено","Измени фильтры или поисковый запрос")+'</td></tr>')+'</tbody>'
- +'</table></div></section><p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов.</p>';
+ +'<tbody>'+(items.length?rows:'<tr><td colspan="10">'+empty("Ничего не найдено","Измени фильтры или поисковый запрос")+'</td></tr>')+'</tbody>'
+ +'</table></div></section><p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов. Колонка «С 23.10 · МойСклад» показывает новые отгрузки отдельно от сравнения январь–сентябрь; складывать эти периоды для оценки падения нельзя.</p>';
 }
 function renderProducts(){
  const list=applySort(data.products.filter(p=>(p.name+" "+p.code+" "+p.category).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))),"products");
