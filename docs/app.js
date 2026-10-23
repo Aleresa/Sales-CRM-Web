@@ -313,7 +313,7 @@ function compareClientRows(a,b){
  const k=clientSortKey, dir=clientSortDirection==="asc"?1:-1;
  const av=a.client,bv=b.client,ai=a.info,bi=b.info;
  const numValue=(x,info)=>({
-   previous:n(x.previous_revenue),current:n(x.current_revenue),
+   previous:n(x.previous_revenue),current:n(x.current_revenue)+recentSalesForMembers(info.members),
    delta:n(x.current_revenue)-n(x.previous_revenue),
    orders:n(x.orders_current),recent:recentSalesForMembers(info.members)
  })[k];
@@ -394,11 +394,11 @@ function renderClients(){
    : (group?'<span class="status">'+h(group.name)+'</span>':'<span class="tiny">—</span>');
   const priority=info.priority?priorityBadge(info.priority):'<span class="tiny">—</span>';
   const newRevenue=recentSalesForMembers(info.members,newSalesMap);
+  const known2026=n(c.current_revenue)+newRevenue;
   return '<tr class="clickable" data-action="'+(isGroup?"group":"client")+'" data-id="'+attr(c.id)+'">'
     +'<td class="long"><b>'+h(c.name)+'</b><div class="tiny client-subtitle">'+h(details)+'</div></td>'
     +'<td>'+secondary+'</td>'
-    +'<td>'+money(c.previous_revenue)+'</td><td>'+money(c.current_revenue)+'</td>'
-    +'<td>'+(newRevenue?'<b class="gain">'+money(newRevenue)+'</b>':'<span class="tiny">—</span>')+'</td>'
+    +'<td>'+money(c.previous_revenue)+'</td><td>'+money(known2026)+'</td>'
     +'<td class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</td>'
     +'<td>'+fmt(c.orders_current)+'</td><td>'+clientStatusCell(info)+'</td><td>'+priority+'</td>'
     +'<td>'+h(dateOut(info.contact))+'</td></tr>';
@@ -416,13 +416,12 @@ function renderClients(){
  +'<section class="panel"><div class="table-wrap"><table class="data-table client-table">'
  +'<thead><tr>'+clientSortHeading(byGroup?"Реальный клиент":"Контрагент","name")
  +clientSortHeading(byGroup?"Юрлиц":"Группа клиентов","secondary")
- +clientSortHeading("Янв–сен 2025","previous")+clientSortHeading("Янв–сен 2026","current")
- +clientSortHeading("С 23.10 · МойСклад","recent")
- +clientSortHeading("Изменение","delta")+clientSortHeading("Заказов 2026","orders")
+ +clientSortHeading("Янв–сен 2025","previous")+clientSortHeading("2026 · учтено","current")
+ +clientSortHeading("Изменение янв–сен","delta")+clientSortHeading("Заказов 2026","orders")
  +clientSortHeading("Статус","status")+clientSortHeading("Приоритет","priority")
  +clientSortHeading("Контакт","contact")+'</tr></thead>'
- +'<tbody>'+(items.length?rows:'<tr><td colspan="10">'+empty("Ничего не найдено","Измени фильтры или поисковый запрос")+'</td></tr>')+'</tbody>'
- +'</table></div></section>'+retiredPanel+'<p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов. Колонка «С 23.10 · МойСклад» показывает новые отгрузки отдельно от сравнения январь–сентябрь; складывать эти периоды для оценки падения нельзя.</p>';
+ +'<tbody>'+(items.length?rows:'<tr><td colspan="9">'+empty("Ничего не найдено","Измени фильтры или поисковый запрос")+'</td></tr>')+'</tbody>'
+ +'</table></div></section>'+retiredPanel+'<p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов. Показатель «2026 · учтено» объединяет покупки за январь–сентябрь и новые продажи с 23 октября. Продажи 01–22.10 по клиентам пока не распределены; сравнение «Изменение янв–сен» включает только сопоставимые 9 месяцев.</p>';
 }
 function renderProducts(){
  const list=applySort(data.products.filter(p=>(p.name+" "+p.code+" "+p.category).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))),"products");
@@ -538,6 +537,7 @@ function openClient(id){
  modal.hidden=false;delete modal.dataset.groupId;
  const group=groupForClient(id);
  const delta=n(c.current_revenue)-n(c.previous_revenue);
+ const known2026=n(c.current_revenue)+recentSalesForMembers([c]);
  document.getElementById("drawer-body").innerHTML=
  '<div class="drawer-top"><div class="eyebrow">КАРТОЧКА КЛИЕНТА</div><button class="icon-btn" id="close-modal" aria-label="Закрыть">×</button></div><h2>'+h(c.name)+'</h2><p>'+h(c.category||c.segment||"Клиент")+'</p>'
  +(group?'<button type="button" class="small-btn" data-open-group="'+attr(group.id)+'">♧ Группа '+h(group.name)+' →</button>'
@@ -550,7 +550,7 @@ function openClient(id){
  +'<button type="button" class="recovery-client-label" data-recovery-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">↗ Разбор закупок и товары для возврата</button>'
  +'<button type="button" class="recovery-client-label" data-insight-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">◈ Остатки и точки роста 2023–2026</button>'
  +'<div class="client-action-danger"><button type="button" data-hide-client="'+attr(c.id)+'">Убрать клиента из CRM</button><small>Пропадёт из рабочих списков и не вернётся после синхронизации. История продаж сохранится.</small></div>'
- +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Отгрузки 2026</span><b>'+money(c.current_revenue)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
+ +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Учтено в 2026</span><b>'+money(known2026)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
  +'<label class="field">Статус<select name="status">'+STATUS.map(v=>option(v,c.status)).join("")+'</select></label>'
