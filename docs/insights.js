@@ -3,7 +3,7 @@
 /* All historical and stock data are fetched from the PRIVATE repository.
    This public script contains no client names, inventory rows, or secrets. */
 let insights = null, insightsError = "", opportunityKey = "", opportunityYear = 2025;
-let opportunityMode = "return", opportunitySearch = "";
+let opportunityMode = "return", opportunitySearch = "", opportunitySort = "score";
 const opportunityDrafts = new Map();
 const yearsOfHistory = [2023,2024,2025,2026];
 
@@ -239,63 +239,110 @@ function displayLostClients(){
 function stockMetric(label,value,sub){
  return '<div class="recovery-metric"><span>'+h(label)+'</span><b>'+h(value)+'</b><small>'+h(sub||"")+'</small></div>';
 }
+
+function visibleOpportunityCandidates(account){
+ const query=opportunitySearch.trim().toLocaleLowerCase("ru");
+ const matched=candidateData(account).filter(c=>c.mode===opportunityMode&&
+  (c.code+" "+c.name+" "+c.category).toLocaleLowerCase("ru").includes(query));
+ const sort={stock:(a,b)=>b.available-a.available,
+  price:(a,b)=>b.price-a.price,
+  loss:(a,b)=>b.loss-a.loss};
+ return matched.sort((a,b)=>(sort[opportunitySort]?.(a,b)||0)||b.score-a.score);
+}
+function opportunityBasketMarkup(candidates){
+ const draft=opportunityDraft(),items=candidates.filter(c=>draft.has(c.code));
+ const past=items.filter(c=>c.mode==="return").length;
+ const knownPrice=items.filter(c=>c.price>0),unitTotal=knownPrice.reduce((sum,c)=>sum+c.price,0);
+ return '<div class="opp-basket-head"><div><div class="opp-step-label">ШАГ 3 · РЕЗУЛЬТАТ</div><h2>Предложение клиенту</h2></div>'
+  +'<span class="opp-basket-counter">'+fmt(items.length)+'</span></div>'
+  +(items.length
+   ?'<div class="opp-basket-summary"><div><small>Выбрано позиций</small><b>'+fmt(items.length)+'</b></div>'
+    +'<div><small>Покупал ранее</small><b>'+fmt(past)+'</b></div></div>'
+    +'<div class="opp-basket-list">'+items.slice(0,20).map(c=>
+      '<div class="opp-basket-item"><div><b>'+h(c.name)+'</b><small>Код '+h(c.code)+' · '+fmt(c.available)+' шт. свободно</small></div>'
+      +'<button type="button" class="opp-basket-remove" data-opp-remove="'+attr(c.code)+'" aria-label="Убрать товар '+attr(c.name)+'" title="Убрать из предложения">×</button></div>'
+     ).join("")
+    +(items.length>20?'<p class="tiny">Ещё '+fmt(items.length-20)+' выбранных товаров</p>':'')+'</div>'
+    +'<div class="opp-basket-subtotal"><small>Сумма по 1 шт. каждого товара</small><b>'+money(unitTotal)+'</b>'
+    +'<small>Только '+fmt(knownPrice.length)+' SKU с ценой. Это ориентир, не стоимость заказа.</small></div>'
+   :'<div class="opp-basket-empty"><strong>Подборка пуста</strong><p>Поставь галочки у товаров слева или нажми «Взять 5 лучших».</p></div>')
+  +'<div class="opp-basket-actions">'
+  +'<button type="button" class="primary" data-opp-action="copy">↗ Скопировать предложение</button>'
+  +'<button type="button" class="small-btn" data-opp-action="task">＋ Создать задачу</button>'
+  +'<button type="button" class="opp-save-btn" data-opp-action="save">Сохранить подборку</button></div>'
+  +'<div id="opp-action-feedback" class="opp-action-feedback" role="status" aria-live="polite">'
+  +(items.length?'Можно подготовить сообщение или задачу для '+fmt(items.length)+' товаров.':'Сначала отметь хотя бы одну позицию.')+'</div>'
+  +'<div id="opp-message-wrap" class="opp-message-wrap" hidden><label for="opp-message-preview">Готовое сообщение клиенту</label>'
+  +'<textarea id="opp-message-preview" rows="7" readonly></textarea></div>';
+}
+function refreshOpportunityBasket(message){
+ const el=document.getElementById("opp-basket");
+ const account=currentOpportunity();
+ if(el&&account)el.innerHTML=opportunityBasketMarkup(candidateData(account));
+ if(message)opportunityFeedback(message);
+}
 function displayStockOpportunities(){
  if(!insights)return histInfoUnavailable("Остатки и точки роста");
  const account=currentOpportunity();if(!account)return histInfoUnavailable("Остатки и точки роста");
  const accounts=allStockOppAccounts();
  const stock=insights.stock.filter(row=>n(row[1])>0);
  const candidates=candidateData(account);
- const draft=opportunityDraft();
- const matched=candidates.filter(c=>c.mode===opportunityMode).filter(c=>
-  (c.code+" "+c.name+" "+c.category).toLowerCase().includes(opportunitySearch.toLowerCase()));
- const sum2023=n(account.amounts[0]),reference=n(account.amounts[opportunityYear-2023]);
- const current=n(account.amounts[3]);
- const past=account.amounts.slice(0,3),peak=Math.max(...past);
+ const draft=opportunityDraft(),matched=visibleOpportunityCandidates(account);
+ const peak=Math.max(...account.amounts.slice(0,3)),current=n(account.amounts[3]);
  const options=accounts.map(c=>option(c.id,opportunityKey).replace('>'+h(c.id)+'</option>','>'+h(c.name)+(c.memberCount>1?" · "+c.memberCount+" юрлиц":"")+'</option>')).join("");
- const groupsInfo='<div class="opp-controls"><label class="field">Клиент<select data-opp-select>'+options+'</select></label>'
- +'<label class="field">Сравнить с 2026<select data-opp-year>'+[2023,2024,2025].map(y=>option(y,opportunityYear)).join("")+'</select></label></div>';
- const metric='<div class="recovery-metrics">'
- +stockMetric("Исторический максимум, янв–сен",money(peak),"за 2023–2025 годы")
- +stockMetric("Отгрузки 2026, янв–сен",money(current),"по всем учтённым юрлицам")
- +stockMetric("Свободный остаток",fmt(stock.reduce((s,p)=>s+n(p[1]),0))+" шт.","все позиции, "+(msSync?msDate(msSync.stock_as_of||msSync.as_of):"23.10.2026"))
- +'</div>';
- const pills='<div class="opp-tabs">'
- +[["return","Вернуть прошлые позиции"],["adjacent","Смежный ассортимент"],["market","Спрос у других клиентов"],["hypothesis","Складские гипотезы"]].map(([key,title])=>
-  '<button type="button" data-opp-mode="'+key+'" class="'+(opportunityMode===key?"active":"")+'">'+title+'</button>').join("")+'</div>';
+ const steps='<div class="opp-steps" aria-label="Шаги подготовки предложения">'
+  +'<div><span>01</span><b>Клиент</b><small>История закупок</small></div>'
+  +'<div><span>02</span><b>Товары</b><small>Остатки сейчас</small></div>'
+  +'<div><span>03</span><b>Предложение</b><small>Сообщение или задача</small></div></div>';
+ const groupsInfo='<div class="opp-controls"><label class="field">Клиент / группа юрлиц<select data-opp-select>'+options+'</select></label>'
+  +'<label class="field">Сравнить с 2026<select data-opp-year>'+[2023,2024,2025].map(y=>option(y,opportunityYear)).join("")+'</select></label></div>';
+ const metrics='<div class="recovery-metrics">'
+  +stockMetric("Максимум, янв–сен 2023–2025",money(peak),"лучший прошлый период")
+  +stockMetric("Отгрузки 2026, янв–сен",money(current),"по всем связанным юрлицам")
+  +stockMetric("Товаров в наличии",fmt(stock.length)+" SKU",msSync?msDate(msSync.stock_as_of||msSync.as_of):"снимок 23.10.2026")
+  +'</div>';
+ const modeNames=[["return","↩ Вернуть старые позиции"],["adjacent","Смежный ассортимент"],["market","Спрос других"],["hypothesis","Гипотезы"]];
+ const pills='<div class="opp-tabs" role="group" aria-label="Тип предложения">'
+  +modeNames.map(([key,title])=>
+   '<button type="button" data-opp-mode="'+key+'" aria-pressed="'+(opportunityMode===key)+'" class="'+(opportunityMode===key?"active":"")+'">'+title+'</button>').join("")+'</div>';
  const notes=opportunityMode==="return"
-  ?"Только SKU, которые клиент реально закупал, затем сократил, и которые доступны на складе. Данные по SKU — отобранные позиции из истории, не полная товарная корзина."
+  ?"Подтверждённые SKU из истории покупателя, где объём снизился. Показываем только товары со свободным остатком."
   :opportunityMode==="adjacent"
-  ?"Гипотезы: товары из знакомых клиенту категорий со складом и подтверждённым спросом по другим клиентам. Отсутствие SKU в выборке не доказывает, что он никогда его не покупал."
+  ?"Товары из близких категорий со спросом у других клиентов. Это гипотезы, а не ранее подтверждённые закупки."
   :opportunityMode==="hypothesis"
-  ?"Новые складские позиции из знакомых клиенту категорий без подтверждённого спроса по отгрузкам. Это гипотеза для тестового предложения, а не прогноз."
-  :"Потенциальные предложения со складом и отгрузками другим клиентам. Это не персонально подтверждённый спрос.";
- const searchRow='<div class="opp-topline"><p class="recovery-description">'+h(notes)+'</p><label class="search">⌕ <input id="opportunity-search" value="'+attr(opportunitySearch)+'" placeholder="Код, товар, группа…"></label></div>';
- const body=matched.slice(0,150).map(r=>'<tr><td><input type="checkbox" class="recovery-check" data-opp-code="'+attr(r.code)+'"'
+  ?"Новые позиции на складе, близкие клиенту по категориям. Спрос следует проверить звонком."
+  :"Товары со спросом у других покупателей, не обязательно подходящие этому клиенту.";
+ const sortOptions=[["score","По потенциалу"],["loss","По потере выручки"],["stock","По наличию"],["price","По цене"]]
+  .map(([v,title])=>'<option value="'+v+'"'+(v===opportunitySort?' selected':'')+'>'+title+'</option>').join("");
+ const searchRow='<div class="opp-topline"><p class="recovery-description">'+h(notes)+'</p>'
+  +'<label class="search">⌕ <input id="opportunity-search" value="'+attr(opportunitySearch)+'" placeholder="Поиск по названию, коду, группе"></label></div>';
+ const actionBar='<div class="opp-list-actions"><div><strong>Товары для обсуждения</strong><small>'+fmt(matched.length)+' вариантов · '+fmt(draft.size)+' выбрано</small></div>'
+  +'<div class="opp-list-tools"><label>Сортировать<select data-opp-sort>'+sortOptions+'</select></label>'
+  +'<button class="small-btn" type="button" data-opp-quick="top"'+(!matched.length?' disabled':'')+'>＋ Взять 5 лучших</button>'
+  +'<button class="opp-clear-btn" type="button" data-opp-quick="clear"'+(!draft.size?' disabled':'')+'>Очистить</button></div></div>';
+ const body=matched.slice(0,150).map(r=>'<tr'+(draft.has(r.code)?' class="opp-row-selected"':'')+'><td>'
+  +'<input type="checkbox" class="recovery-check" aria-label="Выбрать '+attr(r.name)+'" data-opp-code="'+attr(r.code)+'"'
   +(draft.has(r.code)?" checked":"")+'></td>'
   +'<td class="long"><b>'+h(r.name)+'</b><div class="tiny">'+h(r.category)+'</div></td>'
   +'<td>'+h(r.code)+'</td>'
   +'<td>'+money(r.pastRevenue)+'</td><td>'+money(r.currentRevenue)+'</td>'
   +'<td><b class="gain">'+fmt(r.available)+' шт.</b><div class="tiny">резерв: '+fmt(r.reserved)+'</div></td>'
   +'<td>'+money(r.price)+'</td>'
-  +'<td>'+(r.mode==="return"?money(r.stockCover*r.price):r.mode==="hypothesis"?"Гипотеза, нет отгрузок":'Спрос других: '+fmt(r.otherQty)+' шт.')+'</td></tr>').join("");
- const table='<section class="panel"><div class="panel-head"><div><h2>Позиции для обсуждения</h2><p>Остатки: '+(msSync?msDate(msSync.stock_as_of||msSync.as_of):"23 октября 2026") +'</p></div><span class="mini-tag">'+matched.length+' вариантов</span></div>'
- +'<div class="table-wrap"><table class="data-table"><thead><tr><th>Выбрать</th><th>Товар</th><th>Код</th><th>'+opportunityYear+'</th><th>2026</th><th>Доступно</th><th>Цена из остатков</th><th>Ориентир</th></tr></thead>'
- +'<tbody>'+(body||'<tr><td colspan="8">'+empty("Нет подходящих позиций","Измени год или режим подбора")+'</td></tr>')+'</tbody></table></div></section>';
- const selected=candidates.filter(c=>draft.has(c.code));
- const actions='<div class="recovery-actions"><button type="button" class="primary" data-opp-action="save">Сохранить позиции</button>'
-  +'<button type="button" class="small-btn" data-opp-action="copy">Скопировать предложение</button>'
-  +'<button type="button" class="small-btn" data-opp-action="task">Создать задачу</button>'
-  +'<span id="opp-selected" class="recovery-saved">'+selected.length+' выбрано</span></div>'
-  +'<div id="opp-action-feedback" class="opp-action-feedback" role="status" aria-live="polite">'
-  +(selected.length?'Можно скопировать предложение или создать задачу для отмеченных товаров.':'Сначала отметь галочками хотя бы один товар в таблице выше.')+'</div>'
-  +'<div id="opp-message-wrap" class="opp-message-wrap" hidden><label for="opp-message-preview">Текст предложения клиенту</label>'
-  +'<textarea id="opp-message-preview" rows="8" readonly></textarea></div>';
- return header("Остатки и рост","Проверяем четырёхлетнюю историю и выбираем только то, что есть на складе.")
- +groupsInfo+metric+pills+searchRow+table+actions
- +'<div class="recovery-note"><b>Важно:</b> источник остатков — '+(msSync?"МойСклад, "+msDate(msSync.stock_as_of||msSync.as_of):"снимок 23.10.2026") +', количество «Доступно» без резерва. '
- +'Цена взята из файла остатков; она не гарантирует действующую цену или согласованную скидку. '
- +'«Ориентир» для ранее покупавшихся товаров — стоимость меньшего из числа утраченных штук и доступного остатка по цене из прайса, НЕ прогноз выручки. '
- +'Для 2026 года сравниваются январь–сентябрь. Учитывай смену юрлиц и ограничения выборки по SKU.</div>';
+  +'<td>'+(r.mode==="return"?money(r.stockCover*r.price):r.mode==="hypothesis"?"Проверить спрос":'Спрос других: '+fmt(r.otherQty)+' шт.')+'</td></tr>').join("");
+ const table='<section class="panel opp-product-panel">'+actionBar
+  +'<div class="table-wrap"><table class="data-table"><thead><tr><th>✓</th><th>Товар</th><th>Код</th><th>'+opportunityYear+'</th>'
+  +'<th>2026</th><th>Доступно</th><th>Цена</th><th>Основание</th></tr></thead><tbody>'
+  +(body||'<tr><td colspan="8">'+empty("Нет подходящих позиций","Измени год или способ подбора")+'</td></tr>')
+  +'</tbody></table></div>'
+  +(matched.length>150?'<p class="note">Показаны первые 150 результатов из '+fmt(matched.length)+'. Уточни поиск, чтобы увидеть остальные.</p>':'')
+  +'</section>';
+ const basket='<aside id="opp-basket" class="opp-basket">'+opportunityBasketMarkup(candidates)+'</aside>';
+ return header("Остатки и рост","Подбери товары клиенту, собери сообщение и создай задачу в одной рабочей области.")
+  +steps+groupsInfo+metrics
+  +'<div class="opp-section-label">ШАГ 2 · ПОДБОР ТОВАРОВ</div>'+pills+searchRow
+  +'<div class="opp-layout">'+table+basket+'</div>'
+  +'<p class="recovery-note">История SKU охватывает выбранные позиции, а не всю корзину. «Основание» — ориентир для разговора, не прогноз продаж. Цена не учитывает согласованные скидки. Сравнение годов выполнено за январь–сентябрь. '
+  +'Наличие: '+(msSync?"МойСклад, "+msDate(msSync.stock_as_of||msSync.as_of):"снимок 23.10.2026")+'.</p>';
 }
 function opportunityFeedback(message,bad=false){
  const el=document.getElementById("opp-action-feedback");
@@ -360,16 +407,30 @@ root.addEventListener("change",e=>{
  const el=e.target;
  if(el.dataset.oppSelect!==undefined){opportunityKey=el.value;opportunitySearch="";render();}
  if(el.dataset.oppYear!==undefined){opportunityYear=Number(el.value);render();}
+ if(el.dataset.oppSort!==undefined){opportunitySort=el.value;render();}
  if(el.dataset.oppCode!==undefined){
   const draft=opportunityDraft();if(el.checked)draft.add(el.dataset.oppCode);else draft.delete(el.dataset.oppCode);
-  const status=document.getElementById("opp-selected");if(status)status.textContent=draft.size+" выбрано";
-  opportunityFeedback(draft.size?draft.size+" товар(ов) отмечено. Можно копировать предложение или создавать задачу.":"Сначала отметь галочками хотя бы один товар в таблице выше.");
+  const row=el.closest("tr");if(row)row.classList.toggle("opp-row-selected",el.checked);
+  refreshOpportunityBasket();
  }
 });
 root.addEventListener("click",e=>{
- const button=e.target.closest("[data-opp-mode],[data-opp-action],[data-open-opportunity],[data-contact-open]");
+ const button=e.target.closest("[data-opp-mode],[data-opp-action],[data-open-opportunity],[data-contact-open],[data-opp-quick],[data-opp-remove]");
  if(!button)return;
  if(button.dataset.contactOpen!==undefined){startContactOffer(button.dataset.contactOpen);return;}
+ if(button.dataset.oppQuick!==undefined){
+  const account=currentOpportunity(),draft=opportunityDraft();
+  if(button.dataset.oppQuick==="clear")draft.clear();
+  else if(account)visibleOpportunityCandidates(account).slice(0,5).forEach(c=>draft.add(c.code));
+  render();opportunityFeedback(button.dataset.oppQuick==="clear"?"Подборка очищена.":"В подборку добавлены первые подходящие товары.");
+  return;
+ }
+ if(button.dataset.oppRemove!==undefined){
+  opportunityDraft().delete(button.dataset.oppRemove);
+  const checkbox=[...document.querySelectorAll("[data-opp-code]")].find(c=>c.dataset.oppCode===button.dataset.oppRemove);
+  if(checkbox){checkbox.checked=false;checkbox.closest("tr")?.classList.remove("opp-row-selected");}
+  refreshOpportunityBasket("Товар удалён из подборки.");return;
+ }
  if(button.dataset.oppMode!==undefined){opportunityMode=button.dataset.oppMode;opportunitySearch="";render();}
  if(button.dataset.oppAction!==undefined)processOpportunityAction(button.dataset.oppAction);
  if(button.dataset.openOpportunity!==undefined){opportunityKey=button.dataset.openOpportunity;opportunitySearch="";navigate("opportunities");}
