@@ -125,7 +125,9 @@ function crmVirtualClients(){
   const key=crmNameKey(name);
   if(!msId||!key||base.has(key))continue;
   base.add(key);
-  all.push({id:"ms:"+msId,name,
+  // Name-based virtual IDs are stable before and after upgrading the importer.
+  // Keep the real MoySklad ID as metadata for future matching and renames.
+  all.push({id:"ms:"+encodeURIComponent(key),moysklad_id:msId,name,
    previous_revenue:0,current_revenue:0,orders_previous:0,orders_current:0,
    last_order_on:null,category:"Контрагент МойСклад",segment:"Из группы «"+msSync.counterparty_group+"»",
    priority:"Обычный",status:"К работе",source:"moysklad",source_note:"Подтянут автоматически из МойСклад"});
