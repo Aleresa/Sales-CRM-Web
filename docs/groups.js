@@ -4,24 +4,27 @@ function renderGroups() {
  const needle=search.toLocaleLowerCase("ru");
  const list=all.filter(g=>(g.name+" "+g.members.map(c=>c.name).join(" ")).toLocaleLowerCase("ru").includes(needle))
   .sort((a,b)=>n(b.current_revenue)-n(a.current_revenue));
- const linked=new Set(groups().flatMap(g=>g.clientIds||[]));
+ const activeIds=new Set(customers().map(c=>c.id));
+ const linked=new Set(groups().flatMap(g=>g.clientIds||[]).filter(id=>activeIds.has(id)));
  return header("Группы клиентов","Объедини несколько юрлиц в одного реального покупателя.")
  +'<section class="panel group-create"><h2>＋ Создать группу</h2><form id="group-create-form"><input name="name" maxlength="90" required placeholder="Например, iPixel" aria-label="Название группы"><button type="submit" class="primary">Создать</button></form></section>'
  +'<div class="group-totals"><span><b>'+all.length+'</b> групп</span><span><b>'+linked.size+'</b> связанных юрлиц</span><span><b>'+(customers().length-linked.size)+'</b> без группы</span></div>'
  +searchToolbar("Поиск группы или контрагента…")
  +(list.length?'<div class="group-grid">'+list.map(g=>{
   const d=g.current_revenue-g.previous_revenue;
+  const revenueKnown2026=n(g.current_revenue)+recentSalesForMembers(g.members);
   return '<button class="group-card" data-action="group" data-id="'+attr(g.id)+'">'
    +'<div class="group-card-top"><span class="initial">♧</span><div><strong>'+h(g.name)+'</strong><small>'+g.members.length+' юрлиц</small></div><span>→</span></div>'
-   +'<div class="group-card-revenues"><span>2025 <b>'+money(g.previous_revenue)+'</b></span><span>2026 <b>'+money(g.current_revenue)+'</b></span></div>'
+   +'<div class="group-card-revenues"><span>2025, янв–сен <b>'+money(g.previous_revenue)+'</b></span><span>2026, учтено <b>'+money(revenueKnown2026)+'</b></span></div>'
    +'<div class="'+(d<0?"loss":"gain")+'">'+(d<0?"−":"+")+money(Math.abs(d))+' · '+fmt(g.orders_current)+' заказов в 2026</div>'
    +'<p class="tiny">'+h(g.members.map(c=>c.name).join(" · "))+'</p></button>';
  }).join("")+'</div>':empty("Не найдено групп","Создай новую группу или измени запрос."))
- +'<p class="note">Общая выручка — сумма отгрузок юридических лиц за сопоставимый период. Суммы юрлиц не дублируются в групповой аналитике.</p>';
+ +'<p class="note">2026: архивная история плюс новые продажи с 23 октября. Продажи с 1 по 22 октября ещё не распределены по карточкам клиентов; изменение в процентах и рублях сравнивается только за одинаковые месяцы январь–сентябрь.</p>';
 }
 function openGroup(id) {
  const group=groups().find(g=>g.id===id); if(!group)return;
  const summary=summarizeGroup(group), delta=summary.current_revenue-summary.previous_revenue;
+ const revenueKnown2026=n(summary.current_revenue)+recentSalesForMembers(summary.members);
  const linked=new Set(groups().flatMap(g=>g.clientIds||[]));
  const available=customers().filter(c=>!linked.has(c.id)).sort((a,b)=>a.name.localeCompare(b.name,"ru"));
  modal.hidden=false;modal.dataset.groupId=id;
@@ -31,7 +34,7 @@ function openGroup(id) {
  +'<button type="button" class="recovery-client-label" data-recovery-open="g:'+attr(group.id)+'">↗ Разбор закупок и список товаров для диалога</button>'
  +'<button class="recovery-client-label" type="button" data-insight-open="g:'+attr(group.id)+'">◈ Остатки и точки роста · 2023–2026</button>'
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(summary.previous_revenue)+'</b></div>'
- +'<div class="stat"><span>Отгрузки 2026</span><b>'+money(summary.current_revenue)+'</b></div>'
+ +'<div class="stat"><span>Учтено в 2026</span><b>'+money(revenueKnown2026)+'</b></div>'
  +'<div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</b></div>'
  +'<h3 class="group-drawer-title">Юридические лица</h3>'
  +(summary.members.length?summary.members.map(c=>
