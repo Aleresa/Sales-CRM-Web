@@ -207,14 +207,14 @@ function searchToolbar(placeholder){
  return '<div class="toolbar"><label class="search">⌕ <input id="search" type="search" placeholder="'+attr(placeholder)+'" value="'+attr(search)+'"></label><span class="tiny">Для фильтрации используй поиск</span></div>';
 }
 function renderClients(){
- const list=customers().filter(c=>(c.name+" "+c.category+" "+c.status).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru")));
+ const list=customers().filter(c=>(c.name+" "+c.category+" "+c.status+" "+(groupForClient(c.id)?.name||"")).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru")));
  return header("Клиенты","История закупок, изменение выручки, контакты и CRM-статусы.")
  +searchToolbar("Поиск клиента, категории, статуса…")
- +'<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Контрагент</th><th>Отгрузки 2025</th><th>Отгрузки 2026</th><th>Изменение</th><th>Заказов 2026</th><th>Статус</th><th>Приоритет</th><th>Контакт</th></tr></thead><tbody>'
+ +'<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Контрагент</th><th>Группа клиентов</th><th>Отгрузки 2025</th><th>Отгрузки 2026</th><th>Изменение</th><th>Заказов 2026</th><th>Статус</th><th>Приоритет</th><th>Контакт</th></tr></thead><tbody>'
  +(list.length?list.map(c=>{
   const delta=n(c.current_revenue)-n(c.previous_revenue);
-  return '<tr class="clickable" data-action="client" data-id="'+attr(c.id)+'"><td class="long"><b>'+h(c.name)+'</b><div class="tiny">'+h(c.category||"")+'</div></td><td>'+money(c.previous_revenue)+'</td><td>'+money(c.current_revenue)+'</td><td class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</td><td>'+fmt(c.orders_current)+'</td><td>'+statusBadge(c.status)+'</td><td>'+priorityBadge(c.priority)+'</td><td>'+h(dateOut(c.next_contact_on))+'</td></tr>';
- }).join(""):'<tr><td colspan="8">'+empty("Ничего не найдено","Измени поисковый запрос")+'</td></tr>')
+  return '<tr class="clickable" data-action="client" data-id="'+attr(c.id)+'"><td class="long"><b>'+h(c.name)+'</b><div class="tiny">'+h(c.category||"")+'</div></td><td>'+(groupForClient(c.id)?'<span class="status">'+h(groupForClient(c.id).name)+'</span>':'<span class="tiny">—</span>')+'</td><td>'+money(c.previous_revenue)+'</td><td>'+money(c.current_revenue)+'</td><td class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</td><td>'+fmt(c.orders_current)+'</td><td>'+statusBadge(c.status)+'</td><td>'+priorityBadge(c.priority)+'</td><td>'+h(dateOut(c.next_contact_on))+'</td></tr>';
+ }).join(""):'<tr><td colspan="9">'+empty("Ничего не найдено","Измени поисковый запрос")+'</td></tr>')
  +'</tbody></table></div></section><p class="note">Суммы клиентов — отгрузки без распределения возвратов. Сравнение — январь–сентябрь.</p>';
 }
 function renderProducts(){
@@ -260,10 +260,12 @@ function render(){
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
  const c=customers().find(x=>x.id===id);if(!c)return;
- modal.hidden=false;
+ modal.hidden=false;delete modal.dataset.groupId;
+ const group=groupForClient(id);
  const delta=n(c.current_revenue)-n(c.previous_revenue);
  document.getElementById("drawer-body").innerHTML=
  '<div class="drawer-top"><div class="eyebrow">КАРТОЧКА КЛИЕНТА</div><button class="icon-btn" id="close-modal" aria-label="Закрыть">×</button></div><h2>'+h(c.name)+'</h2><p>'+h(c.category||c.segment||"Клиент")+'</p>'
+ +(group?'<button type="button" class="small-btn" data-open-group="'+attr(group.id)+'">♧ Группа '+h(group.name)+' →</button>':'<p class="tiny">Контрагент пока не привязан к группе</p>')
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Отгрузки 2026</span><b>'+money(c.current_revenue)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
