@@ -173,6 +173,29 @@ function portfolio(){
  const used=new Set(groups().flatMap(g=>g.clientIds||[]));
  return [...groups().map(summarizeGroup).filter(g=>g.members.length>0),...customers().filter(c=>!used.has(c.id))];
 }
+/** One physical buyer = one linked client group, or one ungrouped legal entity.
+ * Build this from the exact same visible catalog as the "Клиенты" page,
+ * not from the number of MoySklad counterparties. */
+function crmBuyerUniverse(){
+ const accounts=portfolio();
+ const groupCount=accounts.filter(c=>Array.isArray(c.members)).length;
+ const separateCount=accounts.length-groupCount;
+ const byName=new Map();
+ for(const account of accounts){
+  const id=Array.isArray(account.members)?"g:"+account.id:"c:"+account.id;
+  const names=Array.isArray(account.members)?account.members.map(x=>x.name):[account.name];
+  for(const name of names){
+   const key=crmNameKey(name);
+   if(key&&!byName.has(key))byName.set(key,id);
+  }
+ }
+ return {total:accounts.length,groupCount,separateCount,byName};
+}
+function crmMonthlyActiveBuyers(names,universe){
+ if(!Array.isArray(names))return null;
+ // Never invent a buyer for an unknown / hidden legal entity.
+ return new Set(names.map(name=>universe.byName.get(crmNameKey(name))).filter(Boolean)).size;
+}
 function sortingChoices(kind){
  return kind==="products"
   ? [["loss","Наибольшее падение"],["growth","Наибольший рост"],["current","Выручка 2026"],["previous","Выручка 2025"],["units","Количество 2026"],["name","По названию"]]
@@ -231,29 +254,39 @@ function monthRecord(y,m){
  const sync=typeof msSync!=="undefined"&&msSync?.complete&&
   msSync.history_after==="2026-10-23"&&key>="2026-10"
    ?msSync.salesByMonth?.[key]:null;
- if(!sync)return archived;
+ const universe=crmBuyerUniverse();
+ if(!sync){
+  // XLS monthly summaries do not contain each buyer's identity, so their
+  // historical counterparty count cannot truthfully be relabelled as grouped
+  // physical buyers. Do not display that as "Активных клиентов".
+  return archived?{...archived,active_clients:null,active_total:universe.total,
+   group_count:universe.groupCount,separate_count:universe.separateCount}:archived;
+ }
  const rev=Math.round((n(archived?.revenue)+n(sync.revenue))*100)/100;
- const archiveOrders=archived?.orders;
- // New snapshots distinguish shipments from returns; previous snapshots only
- // provided documents. This fallback preserves the current month's continuity.
- const syncedOrders=n(sync.orders??sync.documents);
- const orders=archiveOrders===null||archiveOrders===undefined
-  ?syncedOrders:n(archiveOrders)+syncedOrders;
+ const archivedOrders=archived?.orders;
+ // Demand shipments only. Old import snapshots use documents as a fallback;
+ // new imports count shipments separately from returns.
+ const syncOrders=n(sync.orders??sync.documents);
+ const orders=archivedOrders===null||archivedOrders===undefined
+  ?syncOrders:n(archivedOrders)+syncOrders;
  const archivedNames=archivedMonthlyClientNames(key,archived);
  const syncedNames=syncMonthlyClientNames(key,sync);
  let activeClients=null;
- if(archived&&archivedNames&&syncedNames){
-  activeClients=new Set([...archivedNames,...syncedNames]).size;
- }else if(!archived){
-  if(sync.active_clients!=null)activeClients=n(sync.active_clients);
-  else if(syncedNames)activeClients=new Set(syncedNames).size;
- }else if(!syncedNames?.length){
-  activeClients=archived.active_clients??null;
- } // If a cross-source union cannot be established, show unknown, never guess.
+ if(archived){
+  if(archivedNames&&syncedNames)
+   activeClients=crmMonthlyActiveBuyers([...archivedNames,...syncedNames],universe);
+  else if(archivedNames&&Array.isArray(syncedNames)&&!syncedNames.length)
+   activeClients=crmMonthlyActiveBuyers(archivedNames,universe);
+ }else if(syncedNames){
+  activeClients=crmMonthlyActiveBuyers(syncedNames,universe);
+ }
+ // A snapshot without names can report legal entities but not grouped buyers;
+ // deliberately leave the numerator unknown instead of claiming exactness.
  const avg=orders>0?rev/orders:null;
  return {...(archived||{}),id:archived?.id||"m-"+key,
   period:archived?.period||key+"-01",revenue:rev,orders,avg_check:avg,
-  active_clients:activeClients,active_total:msSync.group_client_count||null,
+  active_clients:activeClients,active_total:universe.total,
+  group_count:universe.groupCount,separate_count:universe.separateCount,
   units:Math.round((n(archived?.units)+n(sync.units))*1000)/1000,
   combined:true};
 }
@@ -303,13 +336,13 @@ function renderOverview(){
  const trend=growth===null?"Сравнение недоступно":'<span class="change '+(growth<0?"negative":"positive")+'">'+percent(growth)+'</span> к прошлому году';
  const merged=m?.combined;
  const ordersFoot="Отгрузки за выбранный месяц";
- const activeFoot=m?.active_total?"Из "+fmt(m.active_total)+" клиентов · "+(m.active_total?fmt(n(m.active_clients)/m.active_total*100):"0")+"% базы":"Уникальные покупатели за месяц";
+ const activeFoot="База: "+fmt(m?.group_count||0)+" групп + "+fmt(m?.separate_count||0)+" без группы"+(m?.active_total?" · "+fmt(n(m?.active_clients)/m.active_total*100)+"% активных":"");
  const avgFoot="Выручка / количество отгрузок";
 
  const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
  const tasks=taskBundles().filter(b=>b.openCount>0).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
- +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Отгрузки",m?.orders!=null?fmt(m.orders):"—","▤",ordersFoot)+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients)+(m.active_total?" / "+fmt(m.active_total):""):"—","♧",m?.active_clients!=null?activeFoot:"Нет полного перечня покупателей") +metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",avgFoot)+'</section>'
+ +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Отгрузки",m?.orders!=null?fmt(m.orders):"—","▤",ordersFoot)+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients)+(m.active_total?" / "+fmt(m.active_total):""):"—","♧",m?.active_clients!=null?activeFoot:"Нет поимённой истории покупок за месяц для группировки") +metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",avgFoot)+'</section>'
  +'<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Динамика выручки</h2><p>Сравнение '+(year-1)+' и '+year+' годов</p></div><span class="mini-tag">12 месяцев</span></div>'+lineChart()+'</section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Товарные категории</h2><p>Крупнейшие категории · '+year+'</p></div><span class="mini-tag">TOP 7</span></div>'+categoryBars()+'</section></div>'
  +'<div class="lower"><section class="panel"><div class="panel-head"><div><h2>Клиенты, требующие внимания</h2><p>Наибольшее падение отгрузок, янв–сен 2025/2026</p></div><button class="panel-link" data-action="go" data-page="clients">Все клиенты →</button></div><div class="list">'+(clients.length?clients.map(clientButton).join(""):empty("Нет клиентов","Данные не загружены"))+'</div></section>'
