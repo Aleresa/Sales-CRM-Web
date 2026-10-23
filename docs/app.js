@@ -451,7 +451,7 @@ function renderClients(){
    ...allPriorities.filter(p=>!PRIORITIES.includes(p)).sort((a,b)=>a.localeCompare(b,"ru"))];
  const statusOptions='<option value="">Все статусы</option>'+allStatuses.map(value=>option(value,clientStatusFilter)).join("");
  const priorityOptions='<option value="">Все приоритеты</option>'+orderedPriorities.map(value=>option(value,clientPriorityFilter)).join("");
- const count=portfolio().length;
+ const universe=crmBuyerUniverse(),count=universe.total;
  const retired=crmHiddenClients();
  const retiredPanel='<details class="client-retired"><summary>Исключённые клиенты: '+fmt(retired.length)+' · показать / восстановить</summary>'
   +(retired.length?'<div class="client-retired-list">'+retired.map(c=>
@@ -487,7 +487,7 @@ function renderClients(){
  return header("Клиенты",byGroup
    ?"Один реальный клиент — одна строка. Отгрузки и заказы всех его юрлиц суммируются."
    :"Все юридические лица по отдельности. В колонке «Группа» видно, кому они принадлежат.")
- +'<div class="client-list-top">'+controls+'<span class="tiny">'+fmt(count)+' клиентов · '+fmt(customers().length)+' юрлицо/контрагент · '+fmt(groups().length)+' групп</span></div>'
+ +'<div class="client-list-top">'+controls+'<span class="tiny">'+fmt(count)+' реальных клиентов = '+fmt(universe.groupCount)+' групп + '+fmt(universe.separateCount)+' без группы · '+fmt(customers().length)+' юрлиц</span></div>'
  +searchToolbar(byGroup?"Поиск клиента или любого его юрлица…":"Поиск юрлица, группы, категории…")
  +'<div class="client-filter-bar"><label>Статус<select data-client-filter="status" aria-label="Фильтр по статусу">'+statusOptions+'</select></label>'
  +'<label>Приоритет<select data-client-filter="priority" aria-label="Фильтр по приоритету">'+priorityOptions+'</select></label>'
