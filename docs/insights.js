@@ -148,13 +148,16 @@ function histInfoUnavailable(pageName){
 }
 
 let contactSearch = "";
+let contactCache = null;
 function contactQueue(){
+ const key=[insights,insights?.stock,msSync,data.crm.groups,data.crm.clientOverrides];
+ if(contactCache&&key.every((v,i)=>contactCache.key[i]===v))return contactCache.rows;
  const stock=stockMap(),fresh=new Map();
  for(const c of msSync?.salesByClient||[]){
   const key=String(c.name||"").trim().toLocaleLowerCase("ru");
   fresh.set(key,(fresh.get(key)||0)+n(c.revenue));
  }
- return allCustomerHistory().map(account=>{
+ const result=allCustomerHistory().map(account=>{
   const old=account.amounts.slice(0,3),peak=Math.max(...old),year=old.indexOf(peak),current=n(account.amounts[3]);
   if(peak<=0||current>peak*0.8)return null;
   let confirmed=0;const matched=[];
@@ -169,6 +172,8 @@ function contactQueue(){
   const priority=recent>0?3:confirmed>0?(current===0?0:1):2;
   return {account,peak,year,current,loss:Math.max(0,peak-current),confirmed,recent,priority,matched:matched.slice(0,5)};
  }).filter(Boolean).sort((a,b)=>a.priority-b.priority||b.loss-a.loss||b.confirmed-a.confirmed);
+ contactCache={key,rows:result};
+ return result;
 }
 function renderContactQueue(){
  if(!insights)return histInfoUnavailable("План контактов");
