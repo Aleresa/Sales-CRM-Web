@@ -216,3 +216,21 @@
 @media(max-width:1250px){.opp-layout{grid-template-columns:minmax(0,1fr) 300px;gap:12px}.opp-basket{padding:14px}}
 @media(max-width:1060px){.opp-layout{display:flex;flex-direction:column}.opp-product-panel{width:100%}.opp-basket{position:static;max-height:none;width:100%}.opp-basket-list{max-height:350px}.opp-steps{gap:7px}}
 @media(max-width:620px){.opp-steps{grid-template-columns:1fr}.opp-steps>div{grid-template-columns:32px 1fr;padding:10px 12px}.opp-basket{padding:16px}.opp-list-actions{padding:12px}.opp-list-tools{width:100%}.opp-list-tools label{flex:1}.opp-list-tools select{width:100%}}
+
+
+/* Reversible CRM client exclusion: history and archive are not deleted. */
+.client-action-danger{border-top:1px solid #59445c;margin-top:20px;padding-top:17px;display:grid;gap:8px}
+.client-action-danger>button{justify-self:start;border:1px solid #9b607d;color:#ffd7e5;background:#482a3b;padding:10px 14px;border-radius:9px;font-weight:650}
+.client-action-danger>button:hover{background:#623249}
+.client-action-danger small{max-width:480px;color:#a899b4;font-size:11px;line-height:1.5}
+.client-assign-group{margin:13px 0;padding:13px;background:#302440;border:1px solid #5c4772;border-radius:10px}
+.client-assign-group>label{display:block;color:#decef4;font-size:12px;font-weight:700;margin-bottom:8px}
+.client-assign-group>div{display:flex;gap:8px;flex-wrap:wrap}
+.client-assign-group select{min-width:220px;flex:1;padding:10px}
+.client-retired{border:1px solid #564468;border-radius:11px;background:#251d33;margin:16px 0;padding:12px 15px;color:#cdb6e4}
+.client-retired summary{cursor:pointer;font-weight:700;color:#d9c7ed}
+.client-retired-list{display:grid;gap:9px;margin-top:16px;max-height:400px;overflow:auto}
+.client-retired-list>div{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #4e3c5f;padding:11px 3px}
+.client-retired-list button{border:1px solid #6d5985;background:#392b4e;color:#e8d8ff;border-radius:8px;padding:8px 12px;white-space:nowrap}
+.client-retired-list button:hover{background:#4b3765}
+@media(max-width:600px){.client-retired-list>div{flex-direction:column;align-items:flex-start}.client-assign-group>div{display:grid}.client-assign-group select{min-width:0}}
