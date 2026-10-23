@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#110d20">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.github.com; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none';">
+  <title>Sales CRM · Личная аналитика</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="site.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div id="auth" class="auth-overlay">
+    <section class="auth-card">
+      <div class="mark">✦</div>
+      <div class="eyebrow">PRIVATE · SALES WORKSPACE</div>
+      <h1>Твоя Sales CRM</h1>
+      <p>Аналитика и задачи хранятся в твоём приватном репозитории <strong>Aleresa/Sales-CRM</strong>.</p>
+      <form id="auth-form">
+        <label for="token">Fine-grained GitHub token</label>
+        <input id="token" type="password" required autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+        <button type="submit" class="primary">Открыть мою CRM <span>→</span></button>
+      </form>
+      <p id="auth-error" class="error" role="status" hidden></p>
+      <div class="security-note"><span>♢</span> Токен используется только в этой вкладке, не сохраняется в localStorage и не добавляется в исходный код.</div>
+      <details><summary>Где получить токен?</summary><p>На GitHub открой <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">Settings → Developer settings → Fine-grained tokens</a>. Выбери только <b>Aleresa/Sales-CRM</b>, доступ <b>Contents: Read and write</b>. Для просмотра без редактирования достаточно Read-only.</p></details>
+    </section>
+  </div>
+  <div id="shell" class="shell" hidden>
+    <aside id="sidebar" class="sidebar">
+      <div class="brand"><div class="mark">✦</div><div><strong>Sales<span>CRM</span></strong><small>PERSONAL WORKSPACE</small></div></div>
+      <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+      <nav id="nav" class="nav" aria-label="Навигация">
+        <button data-page="overview" class="active">◫ <span>Обзор</span></button>
+        <button data-page="clients">♧ <span>Клиенты</span></button>
+        <button data-page="products">▤ <span>Товары / SKU</span></button>
+        <button data-page="categories">▥ <span>Категории</span></button>
+        <button data-page="tasks">☷ <span>Задачи</span></button>
+      </nav>
+      <div class="sidebar-bottom"><div class="private-label">◈ <span>Данные из приватного GitHub</span></div><button id="disconnect" class="side-action">↪ <span>Закрыть доступ</span></button></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><button id="mobile-menu" class="icon-btn mobile-only" aria-label="Меню">☰</button><span>Рабочее пространство <em>›</em> <b id="breadcrumb">Обзор</b></span><div class="right"><span class="online">● <span>GitHub подключён</span></span><span class="avatar">S</span></div></header>
+      <main class="main"><div id="notice" class="notice" hidden></div><div id="app"></div></main>
+    </div>
+  </div>
+  <div id="modal" class="modal-bg" hidden><section class="drawer" role="dialog" aria-modal="true" aria-label="Редактирование клиента"><div id="drawer-body"></div></section></div>
+</body>
+</html>
