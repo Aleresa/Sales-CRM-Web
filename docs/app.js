@@ -17,6 +17,7 @@ let token = "";
 let data = { monthly:[],clients:[],categories:[],products:[],crm:{schema_version:1,tasks:[],clientOverrides:{}} };
 const now = new Date();
 let page = "overview", search = "", month = now.getMonth()+1, year = now.getFullYear(), saving = false;
+let productSort = "loss", categorySort = "loss", productReverse = false, categoryReverse = false;
 const h = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = v => new Intl.NumberFormat("ru-RU",{maximumFractionDigits:0}).format(Number(v)||0);
 const money = v => fmt(v)+" ₽";
@@ -93,6 +94,56 @@ async function loadData(){
 function customers(){
  return data.clients.map(c=>({...c,...(data.crm.clientOverrides?.[c.id]||{})}));
 }
+function groups(){
+ return Array.isArray(data.crm.groups) ? data.crm.groups : [];
+}
+function groupForClient(id){
+ return groups().find(group=>Array.isArray(group.clientIds) && group.clientIds.includes(id))||null;
+}
+function groupMembers(group){
+ const ids=new Set(group.clientIds||[]);
+ return customers().filter(c=>ids.has(c.id));
+}
+function summarizeGroup(group){
+ const members=groupMembers(group);
+ return {
+  id:group.id,name:group.name,members,
+  previous_revenue:members.reduce((s,c)=>s+n(c.previous_revenue),0),
+  current_revenue:members.reduce((s,c)=>s+n(c.current_revenue),0),
+  orders_current:members.reduce((s,c)=>s+n(c.orders_current),0)
+ };
+}
+function portfolio(){
+ const used=new Set(groups().flatMap(g=>g.clientIds||[]));
+ return [...groups().map(summarizeGroup),...customers().filter(c=>!used.has(c.id))];
+}
+function sortingChoices(kind){
+ return kind==="products"
+  ? [["loss","Наибольшее падение"],["growth","Наибольший рост"],["current","Выручка 2026"],["previous","Выручка 2025"],["units","Количество 2026"],["name","По названию"]]
+  : [["loss","Наибольшее падение"],["growth","Наибольший рост"],["current","Выручка 2026"],["previous","Выручка 2025"],["name","По названию"]];
+}
+function sortingControls(kind){
+ const sort=kind==="products"?productSort:categorySort;
+ const reversed=kind==="products"?productReverse:categoryReverse;
+ return '<label class="sort-control">Сортировать: <select aria-label="Сортировка" data-sort="'+kind+'">'+sortingChoices(kind).map(([key,title])=>option(key,sort).replace('>'+key+'</option>','>'+title+'</option>')).join("")+'</select></label>'
+ +'<button type="button" class="sort-reverse" data-action="reverse-sort" data-kind="'+kind+'" aria-label="Изменить порядок сортировки" title="Обратный порядок">'+(reversed?"↑":"↓")+'</button>';
+}
+function applySort(list,kind){
+ const key=kind==="products"?productSort:categorySort;
+ const reverse=kind==="products"?productReverse:categoryReverse;
+ const revenue=(c,y)=>n(kind==="products"?c["revenue_"+y]:y===2026?c.current:c.prev);
+ const delta=c=>revenue(c,2026)-revenue(c,2025);
+ const cmp=(a,b)=>{
+  if(key==="name")return String(kind==="products"?a.name:a.category).localeCompare(String(kind==="products"?b.name:b.category),"ru");
+  if(key==="loss")return delta(a)-delta(b);
+  if(key==="growth")return delta(b)-delta(a);
+  if(key==="current")return revenue(b,2026)-revenue(a,2026);
+  if(key==="previous")return revenue(b,2025)-revenue(a,2025);
+  if(key==="units")return n(b.units_2026)-n(a.units_2026);
+  return 0;
+ };
+ return list.sort((a,b)=>(reverse?-1:1)*cmp(a,b));
+}
 function monthRecord(y,m){
  return data.monthly.find(r=>String(r.period).startsWith(y+"-"+String(m).padStart(2,"0")));
 }
@@ -133,13 +184,14 @@ function categoryBars(){
 }
 function clientButton(c){
  const diff=n(c.current_revenue)-n(c.previous_revenue);
- return '<button class="item" data-action="client" data-id="'+attr(c.id)+'"><span class="initial">'+h(c.name.charAt(0))+'</span><span class="grow"><b>'+h(c.name)+'</b><small>'+h(c.category||c.segment||"Без категории")+'</small></span><span class="delta '+(diff<0?"negative":"positive")+'">'+(diff<0?"−":"+")+h(compact(Math.abs(diff)))+'</span><span>›</span></button>';
+ const grouped=Array.isArray(c.members);
+ return '<button class="item" data-action="'+(grouped?"group":"client")+'" data-id="'+attr(c.id)+'"><span class="initial">'+h(c.name.charAt(0))+'</span><span class="grow"><b>'+h(c.name)+'</b><small>'+(grouped?h(c.members.length+" юрлиц · группа"):h(c.category||c.segment||"Без категории"))+'</small></span><span class="delta '+(diff<0?"negative":"positive")+'">'+(diff<0?"−":"+")+h(compact(Math.abs(diff)))+'</span><span>›</span></button>';
 }
 function renderOverview(){
  const m=monthRecord(year,month),prev=monthRecord(year-1,month);
  const growth=m&&prev&&n(prev.revenue)?(n(m.revenue)/n(prev.revenue)-1)*100:null;
  const trend=growth===null?"Сравнение недоступно":'<span class="change '+(growth<0?"negative":"positive")+'">'+percent(growth)+'</span> к прошлому году';
- const clients=customers().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
+ const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
  const tasks=data.crm.tasks.filter(t=>!["Закрыт","Заказ получен"].includes(t.status)).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
  +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?fmt(m.orders):"—","▤","За выбранный месяц")+metric("Активных клиентов",m?fmt(m.active_clients):"—","♧","Покупатели за месяц")+metric("Средний чек",m?money(m.avg_check):"—","▥","Средняя сумма отгрузки")+'</section>'
@@ -166,9 +218,10 @@ function renderClients(){
  +'</tbody></table></div></section><p class="note">Суммы клиентов — отгрузки без распределения возвратов. Сравнение — январь–сентябрь.</p>';
 }
 function renderProducts(){
- const list=data.products.filter(p=>(p.name+" "+p.code+" "+p.category).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))).sort((a,b)=>Math.abs(n(b.revenue_2026)-n(b.revenue_2025))-Math.abs(n(a.revenue_2026)-n(a.revenue_2025)));
+ const list=applySort(data.products.filter(p=>(p.name+" "+p.code+" "+p.category).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))),"products");
  return header("Товары и SKU","Потери и рост по каждому товару. Всего "+fmt(data.products.length)+" позиций.")
  +searchToolbar("Поиск названия, артикула или группы…")
+ +'<div class="sort-strip">'+sortingControls("products")+'</div>'
  +'<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Код</th><th>Наименование</th><th>Группа</th><th>2025</th><th>2026</th><th>Разница</th><th>Шт. 2026</th></tr></thead><tbody>'
  +list.slice(0,150).map(p=>{const diff=n(p.revenue_2026)-n(p.revenue_2025);return '<tr><td>'+h(p.code)+'</td><td class="long">'+h(p.name)+'</td><td>'+h(p.category)+'</td><td>'+money(p.revenue_2025)+'</td><td>'+money(p.revenue_2026)+'</td><td class="'+(diff<0?"loss":"gain")+'">'+(diff<0?"−":"+")+money(Math.abs(diff))+'</td><td>'+fmt(p.units_2026)+'</td></tr>';}).join("")
  +'</tbody></table></div></section><p class="note">Показаны первые 150 из '+list.length+' результатов; используйте поиск для конкретного товара.</p>';
@@ -180,8 +233,8 @@ function renderCategories(){
   if(!map.has(key))map.set(key,{category:key,prev:0,current:0});
   const x=map.get(key);if(c.year===2025)x.prev=n(c.revenue);if(c.year===2026)x.current=n(c.revenue);
  });
- const rows=[...map.values()].filter(c=>c.category.toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))).sort((a,b)=>Math.abs(b.current-b.prev)-Math.abs(a.current-a.prev));
- return header("Категории","Структура продаж, сравнение января–сентября 2025 и 2026.")+searchToolbar("Поиск товарной категории…")
+ const rows=applySort([...map.values()].filter(c=>c.category.toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))),"categories");
+ return header("Категории","Структура продаж, сравнение января–сентября 2025 и 2026.")+searchToolbar("Поиск товарной категории…")+'<div class="sort-strip">'+sortingControls("categories")+'</div>'
  +'<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Категория</th><th>2025 · нетто</th><th>2026 · нетто</th><th>Изменение, ₽</th><th>Изменение, %</th></tr></thead><tbody>'
  +rows.map(c=>{const d=c.current-c.prev;return '<tr><td class="long">'+h(c.category)+'</td><td>'+money(c.prev)+'</td><td>'+money(c.current)+'</td><td class="'+(d<0?"loss":"gain")+'">'+(d<0?"−":"+")+money(Math.abs(d))+'</td><td class="'+(d<0?"loss":"gain")+'">'+(c.prev?percent(d/c.prev*100):"—")+'</td></tr>';}).join("")
  +'</tbody></table></div></section>';
@@ -200,9 +253,9 @@ function renderTasks(){
  }).join("")+'</div>';
 }
 function render(){
- clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",products:"Товары",categories:"Категории",tasks:"Задачи"})[page];
+ clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи"})[page];
  document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
- root.innerHTML=({overview:renderOverview,clients:renderClients,products:renderProducts,categories:renderCategories,tasks:renderTasks})[page]();
+ root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks})[page]();
 }
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
@@ -278,12 +331,20 @@ root.addEventListener("click",event=>{
  if(!el)return;
  if(el.dataset.action==="go")navigate(el.dataset.page);
  if(el.dataset.action==="client")openClient(el.dataset.id);
+ if(el.dataset.action==="group")openGroup(el.dataset.id);
+ if(el.dataset.action==="reverse-sort"){
+  if(el.dataset.kind==="products")productReverse=!productReverse;
+  else categoryReverse=!categoryReverse;
+  render();
+ }
 });
 root.addEventListener("change",event=>{
  const el=event.target;
  if(el.dataset.filter==="month"){month=Number(el.value);render();}
  if(el.dataset.filter==="year"){year=Number(el.value);render();}
  if(el.dataset.taskId)updateTask(el.dataset.taskId,el.value);
+ if(el.dataset.sort==="products"){productSort=el.value;productReverse=false;render();}
+ if(el.dataset.sort==="categories"){categorySort=el.value;categoryReverse=false;render();}
 });
 root.addEventListener("input",event=>{
  if(event.target.id!=="search")return;
