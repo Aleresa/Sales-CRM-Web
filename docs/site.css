@@ -234,3 +234,8 @@
 .client-retired-list button{border:1px solid #6d5985;background:#392b4e;color:#e8d8ff;border-radius:8px;padding:8px 12px;white-space:nowrap}
 .client-retired-list button:hover{background:#4b3765}
 @media(max-width:600px){.client-retired-list>div{flex-direction:column;align-items:flex-start}.client-assign-group>div{display:grid}.client-assign-group select{min-width:0}}
+
+
+.sync-catalog-status{border:1px solid #47705d;background:#253c34;padding:13px 16px;border-radius:11px;color:#bee8cf;margin:12px 0 20px;font-size:12px;line-height:1.6}
+.sync-catalog-attention{border-color:#806b4e;background:#393025;color:#efddc6}
+.sync-catalog-attention a{color:#ddc7ff;text-decoration:underline}
