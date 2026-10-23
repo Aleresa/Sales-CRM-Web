@@ -415,9 +415,9 @@ function renderTasks(){
  }).join("")+'</div><p class="note">Исходные задачи юрлиц не удалены: они собраны под общим клиентом. Каждая задача сохраняет собственный срок и статус.</p>';
 }
 function render(){
- clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",opportunities:"Остатки и рост",lost:"Потерянные клиенты",integration:"МойСклад · обновление"})[page];
+ clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",contact:"План контактов",opportunities:"Остатки и рост",lost:"Потерянные клиенты",integration:"МойСклад · обновление"})[page];
  document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
- root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,opportunities:displayStockOpportunities,lost:displayLostClients,integration:renderIntegration})[page]();
+ root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,contact:renderContactQueue,opportunities:displayStockOpportunities,lost:displayLostClients,integration:renderIntegration})[page]();
 }
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
