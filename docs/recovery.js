@@ -112,6 +112,17 @@ function renderRecovery() {
   if(recoveryFilter==="decline")return r.loss>0;
   return r.r25>0||r.r26>0;
  });
+ const byCategory=new Map();
+ for(const p of rows.filter(x=>x.loss>0)){
+  byCategory.set(p.category,(byCategory.get(p.category)||0)+p.loss);
+ }
+ const topCategories=[...byCategory.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
+ const maxCategory=topCategories.length?topCategories[0][1]:1;
+ const categorySignals='<section class="panel recovery-categories"><div class="panel-head"><div><h2>Где сильнее сократили покупки</h2><p>Категории по сумме сокращений в отобранных SKU, не полный анализ всех товаров</p></div></div>'
+  +'<div class="bar-list">'+(topCategories.length?topCategories.map(([name,value])=>
+    '<div class="bar-row"><div><label>'+h(name)+'</label><b>−'+money(value)+'</b></div>'
+    +'<div class="track"><div class="fill" style="width:'+Math.max(1,value/maxCategory*100)+'%"></div></div></div>'
+   ).join(""):'<p class="tiny">Нет подтверждённого снижения по позициям.</p>')+'</div></section>';
  const selection=recoveryDraft(recoveryKey(account));
  const picked=recoverySelected(account,rows);
  const selectedLoss=picked.reduce((s,r)=>s+r.loss,0);
@@ -143,7 +154,7 @@ function renderRecovery() {
   +'Общие показатели клиента выше — полные. Возвраты, остатки, актуальная цена, наличие и маржа по SKU не подтверждены. '
   +'Снижение закупок не равно гарантированному потенциалу возврата.</div>';
  return header("Возврат продаж","Какие товары клиент раньше покупал и с чего начать разговор?")+
-   top+metrics+disclaimer+filterbar+table+actions;
+   top+metrics+disclaimer+categorySignals+filterbar+table+actions;
 }
 
 async function updateRecoveryList(action) {
