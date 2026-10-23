@@ -88,6 +88,11 @@
 .recovery-metric b{display:block;color:#f3e9ff;font-size:22px;margin-top:7px}
 .recovery-actions{display:flex;gap:11px;flex-wrap:wrap;margin:17px 0 8px}
 .recovery-actions button{padding:11px 15px}
+.opp-action-feedback{display:block;border:1px solid #5c4a75;background:#29203c;color:#eee0ff;padding:12px 14px;border-radius:10px;line-height:1.5;margin:8px 0 12px;max-width:850px}
+.opp-action-feedback.bad{border-color:#a6546c;color:#ffd4db;background:#402333}
+.opp-message-wrap{max-width:850px;margin:8px 0 20px}
+.opp-message-wrap label{display:block;font-size:12px;font-weight:700;color:#dccbec;margin-bottom:7px}
+.opp-message-wrap textarea{width:100%;resize:vertical;min-height:150px;padding:12px 14px;font-size:13px;line-height:1.6}
 .recovery-description{line-height:1.65;margin:0 0 15px;color:#a89cbb;font-size:12px}
 .recovery-filters{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:15px}
 .recovery-filters input{padding:11px 12px;flex:1;min-width:210px;max-width:450px}
