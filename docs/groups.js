@@ -89,6 +89,7 @@ document.getElementById("modal").addEventListener("submit",event=>{
 document.getElementById("modal").addEventListener("click",event=>{
  const button=event.target.closest("button");if(!button)return;
  if(button.dataset.openLegal){openClient(button.dataset.openLegal);return;}
+ if(button.dataset.openGroup){openGroup(button.dataset.openGroup);return;}
  const id=modal.dataset.groupId;if(!id)return;
  if(button.dataset.removeMember){updateMember(id,button.dataset.removeMember,false);return;}
  if(button.id==="group-add-member"){
