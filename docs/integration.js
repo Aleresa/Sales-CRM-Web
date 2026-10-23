@@ -55,7 +55,7 @@ function renderIntegration() {
     metric("Последнее обновление",msDate(msSync.as_of),"↻","Не потоковые данные, а снимок") +
     metric("Свободных SKU",fmt(msSync.stock.filter(x=>n(x[1])>0).length),"▤","По всем складам") +
     metric("Отгрузки после 22.10.2026",money(moneySince),"◈","С вычетом возвратов за новый период") +
-    metric("Новых контрагентов на сверку",fmt(unmatched.length),"♧","Не сопоставлены по точному имени") +
+    metric("Покупателей с отгрузками на сверку",fmt(unmatched.length),"♧","Проверено покупателей с отгрузками: "+fmt(msSync.salesByClient.length)) +
     '</section>' +
     '<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Новые продажи по месяцам</h2>' +
     '<p>Отдельно от старой истории до 22 октября 2026</p></div></div>' +
@@ -64,13 +64,13 @@ function renderIntegration() {
      '<tr><td colspan="4">Новых отгрузок пока нет</td></tr>') +
     '</tbody></table></div></section>' +
     '<section class="panel"><div class="panel-head"><div><h2>Контроль сопоставления</h2>' +
-    '<p>Контрагентов необходимо привязать к существующим клиентам или группам</p></div></div>' +
+    '<p>Проверяем '+fmt(msSync.salesByClient.length)+' покупателей с новыми отгрузками из '+fmt(msSync.group_client_count||0)+' контрагентов группы. Остальные пока не сопоставлены.</p></div></div>' +
     (unmatched.length ? '<div class="list">' + unmatched.slice(0,30).map(c=>
       '<div class="item"><span class="grow"><b>'+h(c.name)+'</b><small>Отгрузки: '+money(c.revenue)+'</small></span></div>').join("") +
-      '</div>' : '<p class="muted">Все имена новых покупателей найдены в архивной истории.</p>') +
+      '</div>' : '<p class="muted">Все покупатели с новыми отгрузками найдены по точному имени в архивной истории. Это не проверка всех клиентов группы.</p>') +
     '</section></div>' +
     '<p class="note">Остатки из «МойСклад» заменяют снимок склада от 23.10.2026 при следующем входе в CRM. ' +
     'Старые сравнения январь–сентябрь за 2023–2026 годы остаются неизменными. ' +
     'Сумма за новый период учитывается отдельно, пока не сверены методики отчётов и API. ' +
-    'При ошибке синхронизации старые данные сохраняются; причины проверяются в GitHub Actions.</p>';
+    'При ошибке синхронизации предыдущий снимок сохраняется; ошибки проверяются в Google Apps Script → Количество выполнений.</p>';
 }
