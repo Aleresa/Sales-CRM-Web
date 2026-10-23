@@ -28,6 +28,7 @@ function openGroup(id) {
  document.getElementById("drawer-body").innerHTML=
  '<div class="drawer-top"><span class="eyebrow">РЕАЛЬНЫЙ КЛИЕНТ · ГРУППА</span><button class="icon-btn" id="close-modal" type="button">×</button></div>'
  +'<h2>'+h(group.name)+'</h2><p>'+summary.members.length+' юридических лиц · '+fmt(summary.orders_current)+' заказов за 2026</p>'
+ +'<button type="button" class="recovery-client-label" data-recovery-open="g:'+attr(group.id)+'">↗ Разбор закупок и список товаров для диалога</button>'
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(summary.previous_revenue)+'</b></div>'
  +'<div class="stat"><span>Отгрузки 2026</span><b>'+money(summary.current_revenue)+'</b></div>'
  +'<div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</b></div>'
