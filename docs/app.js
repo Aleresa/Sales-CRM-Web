@@ -100,7 +100,7 @@ async function loadData(){
    stay immutable. Stable virtual IDs keep group links and notes across logins
    and repeated daily imports. No customer data is embedded in the public site. */
 function crmNameKey(value){
- return String(value||"").trim().replace(/\\s+/g," ").toLocaleLowerCase("ru-RU");
+ return String(value||"").trim().replace(/\s+/g," ").toLocaleLowerCase("ru-RU");
 }
 function crmVirtualClients(){
  const base=new Set(data.clients.map(c=>crmNameKey(c.name)));
