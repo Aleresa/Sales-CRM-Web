@@ -4,8 +4,6 @@
 name: MoySklad → private Sales CRM
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '15 4 * * *'
 permissions:
   contents: read
 concurrency:
