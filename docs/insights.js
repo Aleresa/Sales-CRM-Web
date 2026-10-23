@@ -282,10 +282,14 @@ function displayStockOpportunities(){
  +'<div class="table-wrap"><table class="data-table"><thead><tr><th>Выбрать</th><th>Товар</th><th>Код</th><th>'+opportunityYear+'</th><th>2026</th><th>Доступно</th><th>Цена из остатков</th><th>Ориентир</th></tr></thead>'
  +'<tbody>'+(body||'<tr><td colspan="8">'+empty("Нет подходящих позиций","Измени год или режим подбора")+'</td></tr>')+'</tbody></table></div></section>';
  const selected=candidates.filter(c=>draft.has(c.code));
- const actions='<div class="recovery-actions"><button class="primary" data-opp-action="save">Сохранить позиции</button>'
-  +'<button class="small-btn" data-opp-action="copy">Скопировать предложение</button>'
-  +'<button class="small-btn" data-opp-action="task">Создать задачу</button>'
-  +'<span id="opp-selected" class="recovery-saved">'+selected.length+' выбрано</span></div>';
+ const actions='<div class="recovery-actions"><button type="button" class="primary" data-opp-action="save">Сохранить позиции</button>'
+  +'<button type="button" class="small-btn" data-opp-action="copy">Скопировать предложение</button>'
+  +'<button type="button" class="small-btn" data-opp-action="task">Создать задачу</button>'
+  +'<span id="opp-selected" class="recovery-saved">'+selected.length+' выбрано</span></div>'
+  +'<div id="opp-action-feedback" class="opp-action-feedback" role="status" aria-live="polite">'
+  +(selected.length?'Можно скопировать предложение или создать задачу для отмеченных товаров.':'Сначала отметь галочками хотя бы один товар в таблице выше.')+'</div>'
+  +'<div id="opp-message-wrap" class="opp-message-wrap" hidden><label for="opp-message-preview">Текст предложения клиенту</label>'
+  +'<textarea id="opp-message-preview" rows="8" readonly></textarea></div>';
  return header("Остатки и рост","Проверяем четырёхлетнюю историю и выбираем только то, что есть на складе.")
  +groupsInfo+metric+pills+searchRow+table+actions
  +'<div class="recovery-note"><b>Важно:</b> источник остатков — '+(msSync?"МойСклад, "+msDate(msSync.stock_as_of||msSync.as_of):"снимок 23.10.2026") +', количество «Доступно» без резерва. '
@@ -293,16 +297,45 @@ function displayStockOpportunities(){
  +'«Ориентир» для ранее покупавшихся товаров — стоимость меньшего из числа утраченных штук и доступного остатка по цене из прайса, НЕ прогноз выручки. '
  +'Для 2026 года сравниваются январь–сентябрь. Учитывай смену юрлиц и ограничения выборки по SKU.</div>';
 }
+function opportunityFeedback(message,bad=false){
+ const el=document.getElementById("opp-action-feedback");
+ if(el){el.textContent=message;el.classList.toggle("bad",bad);}
+ // A top-level alert remains for accessibility if a page-specific feedback box is missing.
+ else notice(message,bad);
+}
+function opportunityActionBusy(busy){
+ document.querySelectorAll("[data-opp-action]").forEach(el=>el.disabled=busy);
+}
 async function processOpportunityAction(action){
- const account=currentOpportunity();if(!account)return;
+ const account=currentOpportunity();
+ if(!account){opportunityFeedback("Не удалось определить клиента — выбери его повторно.",true);return;}
  const selected=candidateData(account).filter(c=>opportunityDraft().has(c.code));
- if(!selected.length){notice("Отметь хотя бы один товар.",true);return;}
+ if(!selected.length){
+  opportunityFeedback("Не выбрано ни одного доступного товара. Отметь галочкой нужные позиции в таблице выше.",true);
+  return;
+ }
  const txt="Здравствуйте! Посмотрел ваши прошлые закупки и подготовил несколько вариантов, которые сейчас доступны к обсуждению:\n\n"
   +selected.map((c,i)=>(i+1)+". "+c.name+" (арт. "+c.code+", есть "+fmt(c.available)+" шт.)").join("\n")
   +"\n\nПодскажите, что из этого актуально? Можем согласовать ассортимент, цены и объём.";
- if(action==="copy"){try{await navigator.clipboard.writeText(txt);notice("Предложение скопировано в буфер обмена.");}catch{window.prompt("Скопируй сообщение:",txt);}return;}
- if(saving)return;
- saving=true;const key=account.id+":"+opportunityYear;
+ if(action==="copy"){
+  const wrap=document.getElementById("opp-message-wrap"),input=document.getElementById("opp-message-preview");
+  if(wrap&&input){input.value=txt;wrap.hidden=false;}
+  try{
+   if(!navigator.clipboard?.writeText)throw Error("Clipboard API недоступен");
+   await navigator.clipboard.writeText(txt);
+   opportunityFeedback("Предложение из "+selected.length+" позиций скопировано. Вставь текст в WhatsApp или Telegram.");
+  }catch(err){
+   let copied=false;
+   if(input){input.focus();input.select();try{copied=!!document.execCommand("copy");}catch(e){}}
+   opportunityFeedback(copied?"Предложение скопировано.":"Автоматическое копирование недоступно. Текст предложения открыт и выделен ниже: нажми Ctrl+C.",!copied);
+  }
+  return;
+ }
+ if(action!=="save"&&action!=="task")return;
+ if(saving){opportunityFeedback("Предыдущая операция сохранения ещё выполняется.");return;}
+ saving=true;opportunityActionBusy(true);
+ opportunityFeedback(action==="task"?"Создаём задачу в приватной CRM…":"Сохраняем список товаров в приватной CRM…");
+ const key=account.id+":"+opportunityYear;
  try{
   data.crm=await writeJson("crm-state",state=>{
    const next={...state,insightLists:{...(state.insightLists||{}),[key]:selected.map(x=>x.code)}};
@@ -314,9 +347,14 @@ async function processOpportunityAction(action){
    }];
    return next;
   },action==="save"?"save stock-based shortlist":"create stock-based recovery task");
-  notice(action==="task"?"Задача для "+account.name+" создана.":"Подборка сохранена для "+account.name+".");
- }catch(e){notice(e.message,true);}
- finally{saving=false;}
+  opportunityFeedback(action==="task"?
+   "Задача для «"+account.name+"» создана в разделе «Задачи» ("+selected.length+" поз.).":
+   "Подборка из "+selected.length+" товаров сохранена для «"+account.name+"».");
+ }catch(e){
+  opportunityFeedback("Не удалось сохранить: "+(e instanceof Error?e.message:String(e)),true);
+ }finally{
+  saving=false;opportunityActionBusy(false);
+ }
 }
 root.addEventListener("change",e=>{
  const el=e.target;
@@ -325,6 +363,7 @@ root.addEventListener("change",e=>{
  if(el.dataset.oppCode!==undefined){
   const draft=opportunityDraft();if(el.checked)draft.add(el.dataset.oppCode);else draft.delete(el.dataset.oppCode);
   const status=document.getElementById("opp-selected");if(status)status.textContent=draft.size+" выбрано";
+  opportunityFeedback(draft.size?draft.size+" товар(ов) отмечено. Можно копировать предложение или создавать задачу.":"Сначала отметь галочками хотя бы один товар в таблице выше.");
  }
 });
 root.addEventListener("click",e=>{
