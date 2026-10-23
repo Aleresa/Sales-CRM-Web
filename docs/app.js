@@ -417,7 +417,16 @@ function renderTasks(){
 function render(){
  clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",contact:"План контактов",opportunities:"Остатки и рост",lost:"Потерянные клиенты",integration:"МойСклад · обновление"})[page];
  document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
- root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,contact:renderContactQueue,opportunities:displayStockOpportunities,lost:displayLostClients,integration:renderIntegration})[page]();
+ const view=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,contact:renderContactQueue,opportunities:displayStockOpportunities,lost:displayLostClients,integration:renderIntegration})[page];
+ try{
+  if(typeof view!=="function")throw Error("Страница не загружена. Обнови CRM через Ctrl+F5.");
+  root.innerHTML=view();
+ }catch(err){
+  console.error("Ошибка раздела CRM:",page,err);
+  root.innerHTML=header("Не удалось открыть раздел","Остальные данные CRM сохранены.")+
+   '<section class="panel"><p class="error">'+h(err instanceof Error?err.message:String(err))+'</p>'+
+   '<p class="muted">Обнови страницу через Ctrl+F5. Если ошибка останется, пришли текст ошибки.</p></section>';
+ }
 }
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
