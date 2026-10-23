@@ -16,6 +16,7 @@ const modal = document.getElementById("modal");
 let token = "";
 let data = { monthly:[],clients:[],categories:[],products:[],crm:{schema_version:1,tasks:[],clientOverrides:{}} };
 const now = new Date();
+let productCompareYear = 2025, categoryCompareYear = 2025;
 let page = "overview", search = "", month = now.getMonth()+1, year = now.getFullYear(), saving = false;
 let productSort = "loss", categorySort = "loss", productReverse = false, categoryReverse = false;
 let clientView = "grouped"; // Default: one line per actual customer, not per legal entity.
@@ -156,7 +157,7 @@ function metric(label,value,icon,footer){
 }
 function empty(label,text){return '<div class="empty"><strong>'+h(label)+'</strong><p>'+h(text)+'</p></div>';}
 function selectedMonth(){
- return '<div class="controls"><span>▦</span><select aria-label="Месяц" data-filter="month">'+MONTHS.map((v,i)=>option(i+1,month).replace('>'+h(i+1)+'</option>','>'+v+'</option>')).join("")+'</select><select aria-label="Год" data-filter="year">'+[2026,2025,2024,2027,2028,2029].sort((a,b)=>b-a).map(v=>option(v,year)).join("")+'</select></div>';
+ return '<div class="controls"><span>▦</span><select aria-label="Месяц" data-filter="month">'+MONTHS.map((v,i)=>option(i+1,month).replace('>'+h(i+1)+'</option>','>'+v+'</option>')).join("")+'</select><select aria-label="Год" data-filter="year">'+[2029,2028,2027,2026,2025,2024,2023].sort((a,b)=>b-a).map(v=>option(v,year)).join("")+'</select></div>';
 }
 function lineChart(){
  const current=MONTHS.map((_,i)=>monthRecord(year,i+1)?.revenue??null);
@@ -195,7 +196,7 @@ function renderOverview(){
  const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
  const tasks=taskBundles().filter(b=>b.openCount>0).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
- +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?fmt(m.orders):"—","▤","За выбранный месяц")+metric("Активных клиентов",m?fmt(m.active_clients):"—","♧","Покупатели за месяц")+metric("Средний чек",m?money(m.avg_check):"—","▥","Средняя сумма отгрузки")+'</section>'
+ +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?.orders!=null?fmt(m.orders):"—","▤","За выбранный месяц")+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients):"—","♧","Покупатели за месяц")+metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥","Средняя сумма отгрузки")+'</section>'
  +'<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Динамика выручки</h2><p>Сравнение '+(year-1)+' и '+year+' годов</p></div><span class="mini-tag">12 месяцев</span></div>'+lineChart()+'</section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Товарные категории</h2><p>Крупнейшие категории · '+year+'</p></div><span class="mini-tag">TOP 7</span></div>'+categoryBars()+'</section></div>'
  +'<div class="lower"><section class="panel"><div class="panel-head"><div><h2>Клиенты, требующие внимания</h2><p>Наибольшее падение отгрузок, янв–сен 2025/2026</p></div><button class="panel-link" data-action="go" data-page="clients">Все клиенты →</button></div><div class="list">'+(clients.length?clients.map(clientButton).join(""):empty("Нет клиентов","Данные не загружены"))+'</div></section>'
@@ -349,9 +350,9 @@ function renderTasks(){
  }).join("")+'</div><p class="note">Исходные задачи юрлиц не удалены: они собраны под общим клиентом. Каждая задача сохраняет собственный срок и статус.</p>';
 }
 function render(){
- clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж"})[page];
+ clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",opportunities:"Остатки и рост",lost:"Потерянные клиенты"})[page];
  document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
- root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery})[page]();
+ root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,opportunities:displayStockOpportunities,lost:displayLostClients})[page]();
 }
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
@@ -363,6 +364,7 @@ function openClient(id){
  '<div class="drawer-top"><div class="eyebrow">КАРТОЧКА КЛИЕНТА</div><button class="icon-btn" id="close-modal" aria-label="Закрыть">×</button></div><h2>'+h(c.name)+'</h2><p>'+h(c.category||c.segment||"Клиент")+'</p>'
  +(group?'<button type="button" class="small-btn" data-open-group="'+attr(group.id)+'">♧ Группа '+h(group.name)+' →</button>':'<p class="tiny">Контрагент пока не привязан к группе</p>')
  +'<button type="button" class="recovery-client-label" data-recovery-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">↗ Разбор закупок и товары для возврата</button>'
+ +'<button type="button" class="recovery-client-label" data-insight-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">◈ Остатки и точки роста 2023–2026</button>'
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Отгрузки 2026</span><b>'+money(c.current_revenue)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
@@ -430,6 +432,7 @@ document.getElementById("auth-form").addEventListener("submit",async event=>{
   if(repo.full_name!==REPO || !repo.private)throw new Error("Не удалось подтвердить приватный репозиторий.");
   await loadData();
   await loadRecoveryData();
+  await loadInsights();
   input.value="";auth.hidden=true;shell.hidden=false;render();
  }catch(e){token="";error.textContent=e.message;error.hidden=false;}
  finally{button.disabled=false;button.innerHTML="Открыть мою CRM <span>→</span>";}
@@ -461,6 +464,8 @@ root.addEventListener("change",event=>{
  if(el.dataset.taskId)updateTask(el.dataset.taskId,el.value);
  if(el.dataset.sort==="products"){productSort=el.value;productReverse=false;render();}
  if(el.dataset.sort==="categories"){categorySort=el.value;categoryReverse=false;render();}
+ if(el.dataset.compareYear==="products"){productCompareYear=Number(el.value);render();}
+ if(el.dataset.compareYear==="categories"){categoryCompareYear=Number(el.value);render();}
 });
 root.addEventListener("input",event=>{
  if(event.target.id!=="search")return;
