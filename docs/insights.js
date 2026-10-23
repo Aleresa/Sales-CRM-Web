@@ -146,6 +146,71 @@ function histInfoUnavailable(pageName){
  return header(pageName,"Добавлен анализ четырёх лет продаж и товарного остатка.")
   +'<section class="panel">'+empty("Анализ недоступен",insightsError||"Нет данных для построения анализа")+'</section>';
 }
+
+let contactSearch = "";
+function contactQueue(){
+ const stock=stockMap(),fresh=new Map();
+ for(const c of msSync?.salesByClient||[]){
+  const key=String(c.name||"").trim().toLocaleLowerCase("ru");
+  fresh.set(key,(fresh.get(key)||0)+n(c.revenue));
+ }
+ return allCustomerHistory().map(account=>{
+  const old=account.amounts.slice(0,3),peak=Math.max(...old),year=old.indexOf(peak),current=n(account.amounts[3]);
+  if(peak<=0||current>peak*0.8)return null;
+  let confirmed=0;const matched=[];
+  for(const r of customerSkuHistory(account).values()){
+   const st=stock.get(r.code);
+   if(!st||n(st[1])<=0||n(r.revenues[year])<=n(r.revenues[3]))continue;
+   confirmed++;
+   matched.push({code:r.code,name:st[5]||r.code,loss:n(r.revenues[year])-n(r.revenues[3])});
+  }
+  matched.sort((a,b)=>b.loss-a.loss);
+  const recent=account.names.reduce((a,name)=>a+(fresh.get(String(name).trim().toLocaleLowerCase("ru"))||0),0);
+  const priority=recent>0?3:confirmed>0?(current===0?0:1):2;
+  return {account,peak,year,current,loss:Math.max(0,peak-current),confirmed,recent,priority,matched:matched.slice(0,5)};
+ }).filter(Boolean).sort((a,b)=>a.priority-b.priority||b.loss-a.loss||b.confirmed-a.confirmed);
+}
+function renderContactQueue(){
+ if(!insights)return histInfoUnavailable("План контактов");
+ const queue=contactQueue(),active=queue.filter(r=>r.priority<=1),filter=contactSearch.trim().toLocaleLowerCase("ru");
+ const rows=queue.filter(r=>(r.account.name+" "+r.account.names.join(" ")).toLocaleLowerCase("ru").includes(filter));
+ const body=rows.map(r=>{
+  const tag=r.recent>0?"Есть новая отгрузка":r.confirmed===0?"Проверить ассортимент":r.current===0?"Вернуть клиента":"Восстановить объём";
+  return '<tr><td class="long"><b>'+h(r.account.name)+'</b><div class="tiny">Лучший год: '+(2023+r.year)
+   +(r.account.memberCount>1?" · Юрлиц: "+r.account.memberCount:"")+'</div></td>'
+   +'<td><span class="status">'+h(tag)+'</span></td>'
+   +'<td>'+money(r.peak)+'</td><td>'+money(r.current)+'</td><td>'+money(r.loss)+'</td>'
+   +'<td title="'+attr(r.matched.map(p=>p.name).join("; "))+'"><b>'+fmt(r.confirmed)+'</b></td>'
+   +'<td>'+(r.recent>0?money(r.recent):"—")+'</td>'
+   +'<td><button type="button" class="small-btn" data-contact-open="'+attr(r.account.id)+'">Подобрать товары →</button></td></tr>';
+ }).join("");
+ return header("План контактов","Приоритет клиентов по потерянному обороту и товарам, которые есть на складе.")
+  +'<div class="group-totals"><span><b>'+queue.length+'</b> клиентов с падением ≥20%</span>'
+  +'<span><b>'+active.length+'</b> имеют ранее купленные SKU в наличии и не покупали после 22.10</span>'
+  +'<span><b>'+queue.filter(r=>r.recent>0).length+'</b> уже покупали в новом периоде</span></div>'
+  +'<div class="toolbar"><label class="search">⌕ <input id="contact-search" placeholder="Поиск клиента или юрлица" value="'+attr(contactSearch)+'"></label></div>'
+  +'<section class="panel"><div class="panel-head"><div><h2>Кому звонить в первую очередь</h2>'
+  +'<p>Сначала потерянные покупатели со старыми SKU в наличии; затем просевшие и остальные</p></div></div>'
+  +'<div class="table-wrap"><table class="data-table"><thead><tr><th>Клиент</th><th>Ситуация</th>'
+  +'<th>Лучший янв–сен (2023–25)</th><th>Янв–сен 2026</th><th>Падение</th>'
+  +'<th>Старых SKU на складе</th><th>Отгрузки с 23.10</th><th>Действие</th></tr></thead><tbody>'
+  +(body||'<tr><td colspan="8">Клиентов по условиям не найдено.</td></tr>')
+  +'</tbody></table></div></section>'
+  +'<p class="note">Сравниваются одинаковые девять месяцев. Исторические SKU — выборка, а не весь ассортимент закупок; '
+  +'отсутствие совпадений не доказывает отсутствие потенциала. Падение оборота не является прогнозом возврата.</p>';
+}
+function startContactOffer(id){
+ const r=contactQueue().find(x=>x.account.id===id);if(!r)return;
+ opportunityKey=id;opportunityYear=2023+r.year;opportunitySearch="";
+ const direct=candidateData(r.account).filter(x=>x.mode==="return").slice(0,5);
+ opportunityMode=direct.length?"return":"adjacent";
+ const key=id+":"+opportunityYear;
+ if(direct.length&&!opportunityDrafts.has(key)&&!(data.crm.insightLists?.[key]||[]).length)
+  opportunityDrafts.set(key,new Set(direct.map(x=>x.code)));
+ navigate("opportunities");
+ notice(direct.length?"Подобрано "+direct.length+" ранее покупавшихся товаров. Проверь и сохрани подборку.":"Прямых совпадений нет. Показываю смежный ассортимент.");
+}
+
 function displayLostClients(){
  if(!insights)return histInfoUnavailable("Потерянные клиенты");
  const rows=allCustomerHistory().filter(c=>c.amounts[3]===0&&c.amounts.slice(0,3).some(v=>v>0))
@@ -258,14 +323,16 @@ root.addEventListener("change",e=>{
  }
 });
 root.addEventListener("click",e=>{
- const button=e.target.closest("[data-opp-mode],[data-opp-action],[data-open-opportunity]");
+ const button=e.target.closest("[data-opp-mode],[data-opp-action],[data-open-opportunity],[data-contact-open]");
  if(!button)return;
+ if(button.dataset.contactOpen!==undefined){startContactOffer(button.dataset.contactOpen);return;}
  if(button.dataset.oppMode!==undefined){opportunityMode=button.dataset.oppMode;opportunitySearch="";render();}
  if(button.dataset.oppAction!==undefined)processOpportunityAction(button.dataset.oppAction);
  if(button.dataset.openOpportunity!==undefined){opportunityKey=button.dataset.openOpportunity;opportunitySearch="";navigate("opportunities");}
 });
 root.addEventListener("input",e=>{
  const el=e.target;
+ if(el.id==="contact-search"){contactSearch=el.value;const at=el.selectionStart;render();const found=document.getElementById("contact-search");if(found){found.focus();try{found.setSelectionRange(at,at)}catch{}}return;}
  if(el.id!=="opportunity-search"&&el.id!=="lost-search")return;
  opportunitySearch=el.value;const at=el.selectionStart;render();
  const input=document.getElementById(el.id);
