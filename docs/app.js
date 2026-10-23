@@ -203,22 +203,58 @@ function applySort(list,kind){
 // The XLS archive ends 2026-10-22; the MoySklad API import begins 2026-10-23.
 // Never overwrite the archive or add API data to the original array (avoids
 // duplicate revenue on re-render, page reload or repeated login).
+/* A unified monthly sales view. Historical XLS ends Oct 22, 2026 and the API
+ * snapshot starts Oct 23; summing once on read is idempotent.
+ * Historical active clients for October can be identified exactly because
+ * their archived last_order_on falls within Oct 1–22, which matches the XLS
+ * month's 38 active clients. Union with API buyers prevents double counting. */
+function archivedMonthlyClientNames(monthKey,archived){
+ if(monthKey!=="2026-10"||!archived)return null;
+ const buyers=data.clients.filter(c=>String(c.last_order_on||"")>="2026-10-01"&&
+  String(c.last_order_on||"")<="2026-10-22").map(c=>crmNameKey(c.name));
+ const unique=[...new Set(buyers)];
+ // Do not pretend archived identities are complete if the counts diverge.
+ return unique.length===n(archived.active_clients)?unique:null;
+}
+function syncMonthlyClientNames(monthKey,recent){
+ if(!recent)return null;
+ if(Array.isArray(recent.clients))return recent.clients.map(crmNameKey).filter(Boolean);
+ // Old-format October snapshot: last-order date is adequate only in Oct 2026.
+ if(monthKey==="2026-10"&&Array.isArray(msSync?.salesByClient))
+  return msSync.salesByClient.filter(c=>String(c.last_order||"").slice(0,7)===monthKey)
+   .map(c=>crmNameKey(c.name)).filter(Boolean);
+ return null;
+}
 function monthRecord(y,m){
  const key=y+"-"+String(m).padStart(2,"0");
- const archive=data.monthly.find(r=>String(r.period).startsWith(key));
- const recent=typeof msSync!=="undefined"&&msSync?.complete&&
+ const archived=data.monthly.find(r=>String(r.period).startsWith(key));
+ const sync=typeof msSync!=="undefined"&&msSync?.complete&&
   msSync.history_after==="2026-10-23"&&key>="2026-10"
-  ?msSync.salesByMonth?.[key]:null;
- if(!recent)return archive;
- const round=value=>Math.round(value*100)/100;
- return {...(archive||{}),id:archive?.id||"m-"+key,period:archive?.period||key+"-01",
-  revenue:round(n(archive?.revenue)+n(recent.revenue)),
-  units:Math.round((n(archive?.units)+n(recent.units))*1000)/1000,
-  orders:archive?.orders??null,active_clients:archive?.active_clients??null,
-  avg_check:archive?.avg_check??null,
-  archive_revenue:n(archive?.revenue),sync_revenue:n(recent.revenue),
-  sync_docs:n(recent.documents),sync_units:n(recent.units),
-  archive_period_end:"2026-10-22",sync_period_start:"2026-10-23",
+   ?msSync.salesByMonth?.[key]:null;
+ if(!sync)return archived;
+ const rev=Math.round((n(archived?.revenue)+n(sync.revenue))*100)/100;
+ const archiveOrders=archived?.orders;
+ // New snapshots distinguish shipments from returns; previous snapshots only
+ // provided documents. This fallback preserves the current month's continuity.
+ const syncedOrders=n(sync.orders??sync.documents);
+ const orders=archiveOrders===null||archiveOrders===undefined
+  ?syncedOrders:n(archiveOrders)+syncedOrders;
+ const archivedNames=archivedMonthlyClientNames(key,archived);
+ const syncedNames=syncMonthlyClientNames(key,sync);
+ let activeClients=null;
+ if(archived&&archivedNames&&syncedNames){
+  activeClients=new Set([...archivedNames,...syncedNames]).size;
+ }else if(!archived){
+  if(sync.active_clients!=null)activeClients=n(sync.active_clients);
+  else if(syncedNames)activeClients=new Set(syncedNames).size;
+ }else if(!syncedNames?.length){
+  activeClients=archived.active_clients??null;
+ } // If a cross-source union cannot be established, show unknown, never guess.
+ const avg=orders>0?rev/orders:null;
+ return {...(archived||{}),id:archived?.id||"m-"+key,
+  period:archived?.period||key+"-01",revenue:rev,orders,avg_check:avg,
+  active_clients:activeClients,active_total:msSync.group_client_count||null,
+  units:Math.round((n(archived?.units)+n(sync.units))*1000)/1000,
   combined:true};
 }
 function header(title,description,controls=""){
@@ -266,20 +302,20 @@ function renderOverview(){
  const growth=m&&prev&&n(prev.revenue)?(n(m.revenue)/n(prev.revenue)-1)*100:null;
  const trend=growth===null?"Сравнение недоступно":'<span class="change '+(growth<0?"negative":"positive")+'">'+percent(growth)+'</span> к прошлому году';
  const merged=m?.combined;
- const oldOrdersFooter=merged?"Количество из архивного отчёта; новые документы пока не суммируются":"За выбранный месяц";
- const oldActiveFooter=merged?"Число уникальных покупателей уточняется":"Покупатели за месяц";
- const oldAvgFooter=merged?"Средний чек уточняется с учётом новых документов":"Средняя сумма отгрузки";
+ const ordersFoot="Отгрузки за выбранный месяц";
+ const activeFoot=m?.active_total?"Из "+fmt(m.active_total)+" клиентов · "+(m.active_total?fmt(n(m.active_clients)/m.active_total*100):"0")+"% базы":"Уникальные покупатели за месяц";
+ const avgFoot="Выручка / количество отгрузок";
 
  const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
  const tasks=taskBundles().filter(b=>b.openCount>0).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
- +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?.orders!=null?fmt(m.orders):"—","▤",oldOrdersFooter)+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients):"—","♧",oldActiveFooter)+metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",oldAvgFooter)+'</section>'
+ +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Отгрузки",m?.orders!=null?fmt(m.orders):"—","▤",ordersFoot)+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients)+(m.active_total?" / "+fmt(m.active_total):""):"—","♧",m?.active_clients!=null?activeFoot:"Нет полного перечня покупателей") +metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",avgFoot)+'</section>'
  +'<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Динамика выручки</h2><p>Сравнение '+(year-1)+' и '+year+' годов</p></div><span class="mini-tag">12 месяцев</span></div>'+lineChart()+'</section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Товарные категории</h2><p>Крупнейшие категории · '+year+'</p></div><span class="mini-tag">TOP 7</span></div>'+categoryBars()+'</section></div>'
  +'<div class="lower"><section class="panel"><div class="panel-head"><div><h2>Клиенты, требующие внимания</h2><p>Наибольшее падение отгрузок, янв–сен 2025/2026</p></div><button class="panel-link" data-action="go" data-page="clients">Все клиенты →</button></div><div class="list">'+(clients.length?clients.map(clientButton).join(""):empty("Нет клиентов","Данные не загружены"))+'</div></section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Задачи на контроле</h2><p>Открытые контакты и следующие шаги</p></div><button class="panel-link" data-action="go" data-page="tasks">Все задачи →</button></div><div class="list">'+(tasks.length?tasks.map(t=>'<div class="item"><span class="initial">☷</span><span class="grow"><b>'+h(t.name)+'</b><small>'+h(t.openCount)+' задач · '+h(t.anchor.title)+'</small></span><span class="tiny">'+h(dateOut(t.due_on))+'</span></div>').join(""):empty("Нет задач","Создай первую задачу во вкладке «Задачи»"))+'</div></section></div>'
  +'<p class="note">'+(merged?
-  'Продажи автоматически обновляются. Выручка учитывает новые отгрузки и возвраты без повторного сложения. Число заказов, активных покупателей и средний чек ещё не включают новые документы, пока не настроен единый подсчёт. Октябрь неполный.':
+  'Выручка, отгрузки и средний чек рассчитаны автоматически за выбранный месяц. Активные покупатели учитываются один раз, даже при нескольких отгрузках. Для октября 2026 объединены архив до 22 числа и синхронизация после 23 числа. Октябрь неполный.':
   'Данные архивных отчётов; обновление через «МойСклад» применяется к периодам начиная с 23.10.2026. Для сравнений января–сентября используется неизменная история.'
  )+'</p>';
 }
