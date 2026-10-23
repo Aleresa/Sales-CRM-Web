@@ -20,6 +20,8 @@ let productCompareYear = 2025, categoryCompareYear = 2025;
 let page = "overview", search = "", month = now.getMonth()+1, year = now.getFullYear(), saving = false;
 let productSort = "loss", categorySort = "loss", productReverse = false, categoryReverse = false;
 let clientView = "grouped"; // Default: one line per actual customer, not per legal entity.
+let clientSortKey = "delta", clientSortDirection = "asc";
+let clientStatusFilter = "", clientPriorityFilter = "";
 const h = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = v => new Intl.NumberFormat("ru-RU",{maximumFractionDigits:0}).format(Number(v)||0);
 const money = v => fmt(v)+" ₽";
@@ -208,58 +210,121 @@ function priorityBadge(v){return '<span class="priority '+(v==="Срочно"?"u
 function searchToolbar(placeholder){
  return '<div class="toolbar"><label class="search">⌕ <input id="search" type="search" placeholder="'+attr(placeholder)+'" value="'+attr(search)+'"></label><span class="tiny">Для фильтрации используй поиск</span></div>';
 }
+function clientRowDetails(c){
+ const members=Array.isArray(c.members)?c.members:[c];
+ const statuses=[...new Set(members.map(m=>String(m.status||"К работе").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ru"));
+ const priorities=[...new Set(members.map(m=>String(m.priority||"Обычный").trim()).filter(Boolean))];
+ const priorityRank=p=>p==="Срочно"?0:p==="Высокий"?1:p==="Обычный"?2:3;
+ priorities.sort((a,b)=>priorityRank(a)-priorityRank(b)||a.localeCompare(b,"ru"));
+ const contacts=members.map(m=>String(m.next_contact_on||"")).filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)).sort();
+ return {members,statuses,priority:priorities[0]||"",contact:contacts[0]||"",
+   mixed:statuses.length>1,group:Array.isArray(c.members)};
+}
+function compareClientRows(a,b){
+ const k=clientSortKey, dir=clientSortDirection==="asc"?1:-1;
+ const av=a.client,bv=b.client,ai=a.info,bi=b.info;
+ const numValue=x=>({
+   previous:n(x.previous_revenue),current:n(x.current_revenue),
+   delta:n(x.current_revenue)-n(x.previous_revenue),
+   orders:n(x.orders_current)
+ })[k];
+ let result=0;
+ if(["previous","current","delta","orders"].includes(k))result=numValue(av)-numValue(bv);
+ else if(k==="secondary"){
+  if(clientView==="grouped")result=ai.members.length-bi.members.length;
+  else result=(groupForClient(av.id)?.name||"").localeCompare(groupForClient(bv.id)?.name||"","ru");
+ }else if(k==="priority"){
+  const rank=x=>x==="Срочно"?0:x==="Высокий"?1:x==="Обычный"?2:3;
+  result=rank(ai.priority)-rank(bi.priority)||ai.priority.localeCompare(bi.priority,"ru");
+ }else if(k==="contact"){
+  // Blank dates always at the end, regardless of direction.
+  if(!ai.contact||!bi.contact) return ai.contact? -1 : bi.contact? 1 : av.name.localeCompare(bv.name,"ru");
+  result=ai.contact.localeCompare(bi.contact);
+ }else if(k==="status"){
+  result=ai.statuses.join(", ").localeCompare(bi.statuses.join(", "),"ru");
+ }else result=av.name.localeCompare(bv.name,"ru");
+ return result*dir||av.name.localeCompare(bv.name,"ru");
+}
+function clientSortHeading(title,key){
+ const active=clientSortKey===key;
+ const arrow=active?(clientSortDirection==="asc"?"↑":"↓"):"↕";
+ const aria=active?(clientSortDirection==="asc"?"ascending":"descending"):"none";
+ return '<th aria-sort="'+aria+'"><button type="button" class="client-sort-btn'+(active?" active":"")+'" data-client-sort="'+key+'" aria-label="Сортировать по: '+attr(title)+'">'+h(title)
+   +'<span class="client-sort-arrow" aria-hidden="true">'+arrow+'</span></button></th>';
+}
+function clientStatusCell(info){
+ if(!info.statuses.length)return '<span class="tiny">—</span>';
+ if(info.statuses.length===1)return statusBadge(info.statuses[0]);
+ // Display actual statuses so filtering one member of a group is understandable.
+ const first=clientStatusFilter&&info.statuses.includes(clientStatusFilter)?clientStatusFilter:info.statuses[0];
+ const ordered=[first,...info.statuses.filter(x=>x!==first)];
+ return '<div class="client-status-list" title="'+attr(info.statuses.join(" · "))+'">'
+   +ordered.slice(0,2).map(statusBadge).join("")
+   +(ordered.length>2?'<span class="client-more-status">+'+(ordered.length-2)+'</span>':"")+'</div>';
+}
 function renderClients(){
  const byGroup=clientView==="grouped";
  const needle=search.trim().toLocaleLowerCase("ru");
- // A group stays one result even when the search matches a member's legal name.
- const items=(byGroup?portfolio():customers()).filter(c=>{
-  const legalEntities=Array.isArray(c.members)?c.members:[c];
-  const terms=[c.name,...legalEntities.flatMap(m=>[m.name,m.category||"",m.status||"",m.priority||""])];
-  if(!byGroup)terms.push(groupForClient(c.id)?.name||"");
-  return terms.join(" ").toLocaleLowerCase("ru").includes(needle);
- }).sort((a,b)=>{
-  const changeA=n(a.current_revenue)-n(a.previous_revenue);
-  const changeB=n(b.current_revenue)-n(b.previous_revenue);
-  return changeA-changeB || a.name.localeCompare(b.name,"ru");
- });
+ const all=(byGroup?portfolio():customers()).map(client=>({client,info:clientRowDetails(client)}));
+ const items=all.filter(({client:c,info})=>{
+  const matchesSearch=!needle||[
+    c.name,...info.members.flatMap(m=>[m.name,m.category||"",m.status||"",m.priority||""]),
+    ...(byGroup?[]:[groupForClient(c.id)?.name||""])
+   ].join(" ").toLocaleLowerCase("ru").includes(needle);
+  return matchesSearch
+    &&(!clientStatusFilter||info.statuses.includes(clientStatusFilter))
+    &&(!clientPriorityFilter||info.priority===clientPriorityFilter);
+ }).sort(compareClientRows);
+ const allStatuses=[...new Set(customers().map(c=>String(c.status||"К работе").trim()).filter(Boolean))]
+   .sort((a,b)=>a.localeCompare(b,"ru"));
+ const allPriorities=[...new Set(customers().map(c=>String(c.priority||"Обычный").trim()).filter(Boolean))];
+ const orderedPriorities=[...PRIORITIES.filter(p=>allPriorities.includes(p)),
+   ...allPriorities.filter(p=>!PRIORITIES.includes(p)).sort((a,b)=>a.localeCompare(b,"ru"))];
+ const statusOptions='<option value="">Все статусы</option>'+allStatuses.map(value=>option(value,clientStatusFilter)).join("");
+ const priorityOptions='<option value="">Все приоритеты</option>'+orderedPriorities.map(value=>option(value,clientPriorityFilter)).join("");
  const count=portfolio().length;
  const controls='<div class="client-view-controls" role="group" aria-label="Вид списка клиентов">'
   +'<button type="button" data-client-view="grouped" class="'+(byGroup?"active":"")+'">По клиентам</button>'
   +'<button type="button" data-client-view="legal" class="'+(!byGroup?"active":"")+'">По юрлицам</button></div>';
- const rows=items.map(c=>{
-  const isGroup=Array.isArray(c.members);
+ const rows=items.map(({client:c,info})=>{
+  const isGroup=info.group;
   const delta=n(c.current_revenue)-n(c.previous_revenue);
-  const memberCount=isGroup?c.members.length:1;
+  const memberCount=info.members.length;
   const group=(!byGroup&&!isGroup)?groupForClient(c.id):null;
   const details=isGroup
-   ? memberCount+' юрлиц: '+c.members.slice(0,3).map(m=>m.name).join(' · ')+(memberCount>3?' · …':'')
+   ? memberCount+' юрлиц: '+info.members.slice(0,3).map(m=>m.name).join(' · ')+(memberCount>3?' · …':'')
    : (c.category||"Без категории");
   const secondary=byGroup
    ? '<span class="'+(isGroup?"status":"tiny")+'">'+(isGroup?memberCount+' юрлиц':'1 юрлицо')+'</span>'
    : (group?'<span class="status">'+h(group.name)+'</span>':'<span class="tiny">—</span>');
-  const status=isGroup?'<span class="status">Общая карточка</span>':statusBadge(c.status);
-  const priority=isGroup?'<span class="tiny">—</span>':priorityBadge(c.priority);
-  const nextContact=isGroup?'—':dateOut(c.next_contact_on);
+  const priority=info.priority?priorityBadge(info.priority):'<span class="tiny">—</span>';
   return '<tr class="clickable" data-action="'+(isGroup?"group":"client")+'" data-id="'+attr(c.id)+'">'
     +'<td class="long"><b>'+h(c.name)+'</b><div class="tiny client-subtitle">'+h(details)+'</div></td>'
     +'<td>'+secondary+'</td>'
     +'<td>'+money(c.previous_revenue)+'</td><td>'+money(c.current_revenue)+'</td>'
     +'<td class="'+(delta<0?"loss":"gain")+'">'+(delta<0?"−":"+")+money(Math.abs(delta))+'</td>'
-    +'<td>'+fmt(c.orders_current)+'</td><td>'+status+'</td><td>'+priority+'</td>'
-    +'<td>'+h(nextContact)+'</td></tr>';
+    +'<td>'+fmt(c.orders_current)+'</td><td>'+clientStatusCell(info)+'</td><td>'+priority+'</td>'
+    +'<td>'+h(dateOut(info.contact))+'</td></tr>';
  }).join("");
+ const reset=clientStatusFilter||clientPriorityFilter
+   ?'<button type="button" class="client-clear-filters" data-client-clear>Сбросить фильтры ×</button>':"";
  return header("Клиенты",byGroup
    ?"Один реальный клиент — одна строка. Отгрузки и заказы всех его юрлиц суммируются."
    :"Все юридические лица по отдельности. В колонке «Группа» видно, кому они принадлежат.")
  +'<div class="client-list-top">'+controls+'<span class="tiny">'+fmt(count)+' клиентов · '+fmt(customers().length)+' юрлицо/контрагент · '+fmt(groups().length)+' групп</span></div>'
  +searchToolbar(byGroup?"Поиск клиента или любого его юрлица…":"Поиск юрлица, группы, категории…")
- +'<section class="panel"><div class="table-wrap"><table class="data-table">'
- +'<thead><tr><th>'+(byGroup?"Реальный клиент":"Контрагент")+'</th>'
- +'<th>'+(byGroup?"Юрлиц":"Группа клиентов")+'</th>'
- +'<th>Отгрузки 2025</th><th>Отгрузки 2026</th><th>Изменение</th>'
- +'<th>Заказов 2026</th><th>Статус</th><th>Приоритет</th><th>Контакт</th></tr></thead>'
- +'<tbody>'+(items.length?rows:'<tr><td colspan="9">'+empty("Ничего не найдено","Измени поисковый запрос")+'</td></tr>')+'</tbody>'
- +'</table></div></section><p class="note">Групповые показатели — суммы отгрузок участников за январь–сентябрь 2025 и 2026, без распределения возвратов. В сводке каждый контрагент учитывается один раз. Нажми на группу, чтобы увидеть её юрлица.</p>';
+ +'<div class="client-filter-bar"><label>Статус<select data-client-filter="status" aria-label="Фильтр по статусу">'+statusOptions+'</select></label>'
+ +'<label>Приоритет<select data-client-filter="priority" aria-label="Фильтр по приоритету">'+priorityOptions+'</select></label>'
+ +reset+'<span class="client-result-count">Показано '+items.length+' из '+all.length+'</span></div>'
+ +'<section class="panel"><div class="table-wrap"><table class="data-table client-table">'
+ +'<thead><tr>'+clientSortHeading(byGroup?"Реальный клиент":"Контрагент","name")
+ +clientSortHeading(byGroup?"Юрлиц":"Группа клиентов","secondary")
+ +clientSortHeading("Отгрузки 2025","previous")+clientSortHeading("Отгрузки 2026","current")
+ +clientSortHeading("Изменение","delta")+clientSortHeading("Заказов 2026","orders")
+ +clientSortHeading("Статус","status")+clientSortHeading("Приоритет","priority")
+ +clientSortHeading("Контакт","contact")+'</tr></thead>'
+ +'<tbody>'+(items.length?rows:'<tr><td colspan="9">'+empty("Ничего не найдено","Измени фильтры или поисковый запрос")+'</td></tr>')+'</tbody>'
+ +'</table></div></section><p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов.</p>';
 }
 function renderProducts(){
  const list=applySort(data.products.filter(p=>(p.name+" "+p.code+" "+p.category).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))),"products");
@@ -443,6 +508,15 @@ document.getElementById("mobile-menu").addEventListener("click",()=>document.get
 document.getElementById("modal").addEventListener("click",event=>{if(event.target===modal)modal.hidden=true;});
 document.addEventListener("keydown",event=>{if(event.key==="Escape"){modal.hidden=true;document.getElementById("sidebar").classList.remove("open");}});
 root.addEventListener("click",event=>{
+ const sortButton=event.target.closest("[data-client-sort]");
+ if(sortButton){
+  const key=sortButton.dataset.clientSort;
+  if(key===clientSortKey)clientSortDirection=clientSortDirection==="asc"?"desc":"asc";
+  else {clientSortKey=key;clientSortDirection=["name","status","priority","contact","delta"].includes(key)?"asc":"desc";}
+  render();return;
+ }
+ const clearButton=event.target.closest("[data-client-clear]");
+ if(clearButton){clientStatusFilter="";clientPriorityFilter="";render();return;}
  const view=event.target.closest("[data-client-view]");
  if(view){clientView=view.dataset.clientView;search="";render();return;}
  const el=event.target.closest("[data-action]");
@@ -459,6 +533,8 @@ root.addEventListener("click",event=>{
 });
 root.addEventListener("change",event=>{
  const el=event.target;
+ if(el.dataset.clientFilter==="status"){clientStatusFilter=el.value;render();return;}
+ if(el.dataset.clientFilter==="priority"){clientPriorityFilter=el.value;render();return;}
  if(el.dataset.filter==="month"){month=Number(el.value);render();}
  if(el.dataset.filter==="year"){year=Number(el.value);render();}
  if(el.dataset.taskId)updateTask(el.dataset.taskId,el.value);
