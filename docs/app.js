@@ -562,6 +562,25 @@ function openClient(id){
  +'<button type="submit" class="primary save">Сохранить изменения в GitHub</button></form>';
  document.getElementById("close-modal").addEventListener("click",()=>modal.hidden=true);
 }
+async function crmExcludeGroup(groupId){
+ if(saving)return;
+ const group=groups().find(g=>g.id===groupId);
+ if(!group)return;
+ const memberIds=groupMembers(group).map(c=>c.id);
+ if(!memberIds.length){notice("В этой группе уже нет активных контрагентов.",true);return;}
+ if(!confirm('Убрать из CRM клиента «'+group.name+'» и все его '+memberIds.length+' юрлиц(а)?\n\nИстория продаж останется. Все юрлица можно восстановить в разделе «Клиенты» → «Исключённые».'))return;
+ saving=true;
+ try{
+  data.crm=await writeJson("crm-state",state=>{
+   const ids=new Set(state.hiddenClientIds||[]);
+   memberIds.forEach(id=>ids.add(id));
+   return {...state,hiddenClientIds:[...ids].sort()};
+  },"exclude closed customer group");
+  modal.hidden=true;render();
+  notice("Клиент «"+group.name+"» исключён из рабочих списков. Юрлица доступны для восстановления.");
+ }catch(e){notice("Не удалось убрать группу: "+e.message,true);}
+ finally{saving=false;}
+}
 async function crmSetHiddenClient(clientId,hide){
  if(saving)return;
  const target=crmAllClients().find(c=>c.id===clientId);
