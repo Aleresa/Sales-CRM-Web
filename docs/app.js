@@ -115,7 +115,10 @@ function crmVirtualClients(){
    category:"Исторический контрагент",segment:"Из истории 2023–2026",
    priority:"Обычный",status:"К работе",source:"archive",source_note:"Архивные отгрузки 2023–2026"});
  }
- const synced=typeof msSync!=="undefined"&&Array.isArray(msSync?.counterparties)?msSync.counterparties:[];
+ const synced=typeof msSync!=="undefined"&&Array.isArray(msSync?.counterparties)?msSync.counterparties:
+  // Compatibility until updated importer is copied to Apps Script once.
+  typeof msSync!=="undefined"&&Array.isArray(msSync?.salesByClient)
+   ?msSync.salesByClient.map(entry=>["sale:"+crmNameKey(entry.name),entry.name]):[];
  for(const record of synced){
   if(!Array.isArray(record)||record.length<2)continue;
   const msId=String(record[0]||"").trim(),name=String(record[1]||"").trim();
@@ -166,7 +169,7 @@ function summarizeGroup(group){
 }
 function portfolio(){
  const used=new Set(groups().flatMap(g=>g.clientIds||[]));
- return [...groups().map(summarizeGroup),...customers().filter(c=>!used.has(c.id))];
+ return [...groups().map(summarizeGroup).filter(g=>g.members.length>0),...customers().filter(c=>!used.has(c.id))];
 }
 function sortingChoices(kind){
  return kind==="products"
@@ -456,7 +459,13 @@ function taskClient(t){
 }
 function taskBundles(){
  const result=new Map();
+ const hiddenNames=new Set(crmHiddenClients().map(c=>crmNameKey(c.name)));
+ const activeNames=new Set(customers().map(c=>crmNameKey(c.name)));
  for(const task of data.crm.tasks){
+  const clientKey=crmNameKey(task.client_name);
+  const assignedGroup=task.groupId?groups().find(g=>g.id===task.groupId):null;
+  if(assignedGroup && assignedGroup.clientIds?.length && groupMembers(assignedGroup).length===0)continue;
+  if(!assignedGroup && hiddenNames.has(clientKey) && !activeNames.has(clientKey))continue;
   const account=taskClient(task);
   const key=account.groupId?"g:"+account.groupId: "task:"+task.id;
   if(!result.has(key))result.set(key,{...account,tasks:[]});
