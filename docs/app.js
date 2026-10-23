@@ -176,7 +176,13 @@ function portfolio(){
 /** One physical buyer = one linked client group, or one ungrouped legal entity.
  * Build this from the exact same visible catalog as the "Клиенты" page,
  * not from the number of MoySklad counterparties. */
+let crmBuyerUniverseCache=null;
 function crmBuyerUniverse(){
+ const sources=[data.clients,data.crm,
+  typeof insights!=="undefined"?insights?.clients:null,
+  typeof msSync!=="undefined"?msSync:null];
+ if(crmBuyerUniverseCache&&sources.every((source,i)=>source===crmBuyerUniverseCache.sources[i]))
+  return crmBuyerUniverseCache.value;
  const accounts=portfolio();
  const groupCount=accounts.filter(c=>Array.isArray(c.members)).length;
  const separateCount=accounts.length-groupCount;
@@ -189,7 +195,9 @@ function crmBuyerUniverse(){
    if(key&&!byName.has(key))byName.set(key,id);
   }
  }
- return {total:accounts.length,groupCount,separateCount,byName};
+ const value={total:accounts.length,groupCount,separateCount,byName};
+ crmBuyerUniverseCache={sources,value};
+ return value;
 }
 function crmMonthlyActiveBuyers(names,universe){
  if(!Array.isArray(names))return null;
