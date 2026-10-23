@@ -1,0 +1,46 @@
+# Public workflow CODE only. Private data is checked out with a repo-scoped
+# fine-grained secret and committed back to private Aleresa/Sales-CRM.
+# No uploaded artifacts or log dumps of customer data.
+name: MoySklad → private Sales CRM
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 4 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: sales-crm-moysklad-public-runner
+  cancel-in-progress: false
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PRIVATE CRM using a repository-scoped secret
+        uses: actions/checkout@v4
+        with:
+          repository: Aleresa/Sales-CRM
+          ref: main
+          path: private-crm
+          token: ${{ secrets.CRM_PRIVATE_TOKEN }}
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate import logic
+        run: python -m unittest discover -s private-crm/tests -v
+      - name: Fetch MoySklad read-only snapshot
+        env:
+          MOYSKLAD_TOKEN: ${{ secrets.MOYSKLAD_TOKEN }}
+        run: python private-crm/scripts/sync_moysklad.py
+      - name: Save to PRIVATE repo only
+        working-directory: private-crm
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/moysklad-sync.json
+          if ! git diff --cached --quiet; then
+            git commit -m "crm: refresh MoySklad read-only snapshot"
+            git push origin HEAD:main
+          fi
