@@ -187,7 +187,7 @@ function displayStockOpportunities(){
  const metric='<div class="recovery-metrics">'
  +stockMetric("Исторический максимум, янв–сен",money(peak),"за 2023–2025 годы")
  +stockMetric("Отгрузки 2026, янв–сен",money(current),"по всем учтённым юрлицам")
- +stockMetric("Свободный остаток",fmt(stock.reduce((s,p)=>s+n(p[1]),0))+" шт.","все позиции, "+(msSync?msDate(msSync.as_of):"23.10.2026"))
+ +stockMetric("Свободный остаток",fmt(stock.reduce((s,p)=>s+n(p[1]),0))+" шт.","все позиции, "+(msSync?msDate(msSync.stock_as_of||msSync.as_of):"23.10.2026"))
  +'</div>';
  const pills='<div class="opp-tabs">'
  +[["return","Вернуть прошлые позиции"],["adjacent","Смежный ассортимент"],["market","Спрос у других клиентов"],["hypothesis","Складские гипотезы"]].map(([key,title])=>
@@ -208,7 +208,7 @@ function displayStockOpportunities(){
   +'<td><b class="gain">'+fmt(r.available)+' шт.</b><div class="tiny">резерв: '+fmt(r.reserved)+'</div></td>'
   +'<td>'+money(r.price)+'</td>'
   +'<td>'+(r.mode==="return"?money(r.stockCover*r.price):r.mode==="hypothesis"?"Гипотеза, нет отгрузок":'Спрос других: '+fmt(r.otherQty)+' шт.')+'</td></tr>').join("");
- const table='<section class="panel"><div class="panel-head"><div><h2>Позиции для обсуждения</h2><p>Остатки: '+(msSync?msDate(msSync.as_of):"23 октября 2026") +'</p></div><span class="mini-tag">'+matched.length+' вариантов</span></div>'
+ const table='<section class="panel"><div class="panel-head"><div><h2>Позиции для обсуждения</h2><p>Остатки: '+(msSync?msDate(msSync.stock_as_of||msSync.as_of):"23 октября 2026") +'</p></div><span class="mini-tag">'+matched.length+' вариантов</span></div>'
  +'<div class="table-wrap"><table class="data-table"><thead><tr><th>Выбрать</th><th>Товар</th><th>Код</th><th>'+opportunityYear+'</th><th>2026</th><th>Доступно</th><th>Цена из остатков</th><th>Ориентир</th></tr></thead>'
  +'<tbody>'+(body||'<tr><td colspan="8">'+empty("Нет подходящих позиций","Измени год или режим подбора")+'</td></tr>')+'</tbody></table></div></section>';
  const selected=candidates.filter(c=>draft.has(c.code));
@@ -218,7 +218,7 @@ function displayStockOpportunities(){
   +'<span id="opp-selected" class="recovery-saved">'+selected.length+' выбрано</span></div>';
  return header("Остатки и рост","Проверяем четырёхлетнюю историю и выбираем только то, что есть на складе.")
  +groupsInfo+metric+pills+searchRow+table+actions
- +'<div class="recovery-note"><b>Важно:</b> источник остатков — '+(msSync?"МойСклад, "+msDate(msSync.as_of):"снимок 23.10.2026") +', количество «Доступно» без резерва. '
+ +'<div class="recovery-note"><b>Важно:</b> источник остатков — '+(msSync?"МойСклад, "+msDate(msSync.stock_as_of||msSync.as_of):"снимок 23.10.2026") +', количество «Доступно» без резерва. '
  +'Цена взята из файла остатков; она не гарантирует действующую цену или согласованную скидку. '
  +'«Ориентир» для ранее покупавшихся товаров — стоимость меньшего из числа утраченных штук и доступного остатка по цене из прайса, НЕ прогноз выручки. '
  +'Для 2026 года сравниваются январь–сентябрь. Учитывай смену юрлиц и ограничения выборки по SKU.</div>';
