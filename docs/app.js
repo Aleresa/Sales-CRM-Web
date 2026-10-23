@@ -148,8 +148,26 @@ function applySort(list,kind){
  };
  return list.sort((a,b)=>(reverse?-1:1)*cmp(a,b));
 }
+// The XLS archive ends 2026-10-22; the MoySklad API import begins 2026-10-23.
+// Never overwrite the archive or add API data to the original array (avoids
+// duplicate revenue on re-render, page reload or repeated login).
 function monthRecord(y,m){
- return data.monthly.find(r=>String(r.period).startsWith(y+"-"+String(m).padStart(2,"0")));
+ const key=y+"-"+String(m).padStart(2,"0");
+ const archive=data.monthly.find(r=>String(r.period).startsWith(key));
+ const recent=typeof msSync!=="undefined"&&msSync?.complete&&
+  msSync.history_after==="2026-10-23"&&key>="2026-10"
+  ?msSync.salesByMonth?.[key]:null;
+ if(!recent)return archive;
+ const round=value=>Math.round(value*100)/100;
+ return {...(archive||{}),id:archive?.id||"m-"+key,period:archive?.period||key+"-01",
+  revenue:round(n(archive?.revenue)+n(recent.revenue)),
+  units:Math.round((n(archive?.units)+n(recent.units))*1000)/1000,
+  orders:archive?.orders??null,active_clients:archive?.active_clients??null,
+  avg_check:archive?.avg_check??null,
+  archive_revenue:n(archive?.revenue),sync_revenue:n(recent.revenue),
+  sync_docs:n(recent.documents),sync_units:n(recent.units),
+  archive_period_end:"2026-10-22",sync_period_start:"2026-10-23",
+  combined:true};
 }
 function header(title,description,controls=""){
  return '<div class="heading"><div><div class="eyebrow">SALES / CRM · PERSONAL WORKSPACE</div><h1>'+title+' <span class="spark">✦</span></h1><p>'+description+'</p></div>'+controls+'</div>';
@@ -195,15 +213,27 @@ function renderOverview(){
  const m=monthRecord(year,month),prev=monthRecord(year-1,month);
  const growth=m&&prev&&n(prev.revenue)?(n(m.revenue)/n(prev.revenue)-1)*100:null;
  const trend=growth===null?"Сравнение недоступно":'<span class="change '+(growth<0?"negative":"positive")+'">'+percent(growth)+'</span> к прошлому году';
+ const merged=m?.combined;
+ const oldOrdersFooter=merged?"До 22.10; новых документов: "+fmt(m.sync_docs):"За выбранный месяц";
+ const oldActiveFooter=merged?"До 22.10. Новые покупатели отдельно не суммируются.":"Покупатели за месяц";
+ const oldAvgFooter=merged?"До 22.10; средний чек новых отгрузок пока отдельно.":"Средняя сумма отгрузки";
+ const monthBridge=merged?'<div class="sales-bridge" role="status">'
+  +'<div><span>История до 22 октября</span><strong>'+money(m.archive_revenue)+'</strong></div>'
+  +'<span class="sales-bridge-sign">＋</span><div><span>МойСклад с 23 октября</span><strong>'+money(m.sync_revenue)+'</strong><small>'+fmt(m.sync_docs)+' документов · '+fmt(m.sync_units)+' шт.</small></div>'
+  +'<span class="sales-bridge-sign">＝</span><div class="sales-bridge-total"><span>Общая выручка за месяц</span><strong>'+money(m.revenue)+'</strong></div></div>':"";
  const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
  const tasks=taskBundles().filter(b=>b.openCount>0).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
- +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?.orders!=null?fmt(m.orders):"—","▤","За выбранный месяц")+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients):"—","♧","Покупатели за месяц")+metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥","Средняя сумма отгрузки")+'</section>'
+ +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric(merged?"Заказы · старый отчёт":"Заказы",m?.orders!=null?fmt(m.orders):"—","▤",oldOrdersFooter)+metric(merged?"Активных · старый отчёт":"Активных клиентов",m?.active_clients!=null?fmt(m.active_clients):"—","♧",oldActiveFooter)+metric(merged?"Средний чек · старый отчёт":"Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",oldAvgFooter)+'</section>'
+ +monthBridge
  +'<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Динамика выручки</h2><p>Сравнение '+(year-1)+' и '+year+' годов</p></div><span class="mini-tag">12 месяцев</span></div>'+lineChart()+'</section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Товарные категории</h2><p>Крупнейшие категории · '+year+'</p></div><span class="mini-tag">TOP 7</span></div>'+categoryBars()+'</section></div>'
  +'<div class="lower"><section class="panel"><div class="panel-head"><div><h2>Клиенты, требующие внимания</h2><p>Наибольшее падение отгрузок, янв–сен 2025/2026</p></div><button class="panel-link" data-action="go" data-page="clients">Все клиенты →</button></div><div class="list">'+(clients.length?clients.map(clientButton).join(""):empty("Нет клиентов","Данные не загружены"))+'</div></section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Задачи на контроле</h2><p>Открытые контакты и следующие шаги</p></div><button class="panel-link" data-action="go" data-page="tasks">Все задачи →</button></div><div class="list">'+(tasks.length?tasks.map(t=>'<div class="item"><span class="initial">☷</span><span class="grow"><b>'+h(t.name)+'</b><small>'+h(t.openCount)+' задач · '+h(t.anchor.title)+'</small></span><span class="tiny">'+h(dateOut(t.due_on))+'</span></div>').join(""):empty("Нет задач","Создай первую задачу во вкладке «Задачи»"))+'</div></section></div>'
- +'<p class="note">Показатели из выгрузки на 22.10.2026. Октябрь 2026 неполный и не сопоставим напрямую с полным октябрём 2025. ₽ — условная валюта исходного анализа.</p>';
+ +'<p class="note">'+(merged?
+  'Выручка и график объединяют архив до 22.10.2026 с отгрузками и возвратами группы из «МойСклад» с 23.10.2026. Заказы, активные клиенты и средний чек показаны только по архивному периоду: без документной сверки они не суммируются. Октябрь ещё не завершён.':
+  'Данные архивных отчётов; обновление через «МойСклад» применяется к периодам начиная с 23.10.2026. Для сравнений января–сентября используется неизменная история.'
+ )+'</p>';
 }
 function statusBadge(v){return '<span class="status">'+h(v||"К работе")+'</span>';}
 function priorityBadge(v){return '<span class="priority '+(v==="Срочно"?"urgent":v==="Высокий"?"high":"")+'">'+h(v||"Обычный")+'</span>';}
