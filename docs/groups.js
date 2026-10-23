@@ -68,12 +68,16 @@ async function createGroup(form){
  },id);
 }
 async function updateMember(groupId,clientId,add){
- if(!data.clients.some(c=>c.id===clientId))return;
+ if(!customers().some(c=>c.id===clientId))return;
  await saveGroups("update group members",items=>{
   if(!items.some(g=>g.id===groupId))throw Error("Группа не найдена.");
   if(add&&items.some(g=>g.clientIds.includes(clientId)))throw Error("Контрагент уже связан с другой группой.");
   return items.map(g=>g.id===groupId?{...g,clientIds:add?[...g.clientIds,clientId]:g.clientIds.filter(id=>id!==clientId)}:g);
  },groupId);
+}
+function awaitAssignClientGroup(groupId,clientId){
+ // Use the same concurrency-safe write and single-group invariant as the group editor.
+ updateMember(groupId,clientId,true);
 }
 document.getElementById("app").addEventListener("submit",event=>{
  if(event.target.id==="group-create-form"){event.preventDefault();createGroup(event.target);}
@@ -90,6 +94,14 @@ document.getElementById("modal").addEventListener("submit",event=>{
 });
 document.getElementById("modal").addEventListener("click",event=>{
  const button=event.target.closest("button");if(!button)return;
+ if(button.id==="assign-client-to-group"){
+  const picker=document.getElementById("client-group-picker");
+  const clientId=button.dataset.clientId;
+  if(picker?.value&&clientId){
+   awaitAssignClientGroup(picker.value,clientId);
+  }else notice("Сначала выбери группу клиентов.",true);
+  return;
+ }
  if(button.dataset.openLegal){openClient(button.dataset.openLegal);return;}
  if(button.dataset.openGroup){openGroup(button.dataset.openGroup);return;}
  const id=modal.dataset.groupId;if(!id)return;
