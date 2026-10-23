@@ -117,3 +117,23 @@
 .opp-topline>.search{flex:1;min-width:270px}
 .opp-controls .field select{font-size:13px}
 @media(max-width:730px){.opp-controls{flex-direction:column;align-items:stretch}.opp-controls>.field{min-width:0;max-width:none;width:100%}.opp-topline>.search{width:100%;min-width:0}.sort-strip{justify-content:flex-start;flex-wrap:wrap}}
+
+
+/* Customer-column sorting + independent status/priority filters */
+.client-filter-bar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:-3px 0 18px}
+.client-filter-bar>label{display:grid;gap:5px;min-width:190px;color:#b8a8d0;font-size:12px;font-weight:600}
+.client-filter-bar select{width:100%;min-height:42px;padding:10px 32px 10px 12px;background:#29203b;border:1px solid #59486a;border-radius:9px;color:#e9ddf9}
+.client-filter-bar select:hover{border-color:#9a80bf}
+.client-clear-filters{padding:10px 14px;border-radius:9px;border:1px solid #614876;background:#372847;color:#dac5ef;font-size:12px;min-height:42px}
+.client-clear-filters:hover{border-color:#c7b3f0}
+.client-result-count{margin-left:auto;margin-bottom:11px;color:#a99abb;font-size:12px;white-space:nowrap}
+.client-table thead th{padding:0;vertical-align:middle}
+.client-sort-btn{width:100%;min-height:47px;display:inline-flex;align-items:center;gap:7px;justify-content:flex-start;padding:12px 15px;background:transparent;color:#c6b6e0;border:0;font-size:11px;font-weight:700;white-space:nowrap;text-align:left;cursor:pointer}
+.client-sort-btn:hover,.client-sort-btn:focus-visible{color:#f6eaff;background:#49365c;outline:0}
+.client-sort-btn.active{color:#e6d1ff;background:#3b2c50}
+.client-sort-arrow{font-size:13px;color:#85739b;flex-shrink:0}
+.client-sort-btn.active .client-sort-arrow{color:#c7b3f0}
+.client-status-list{display:flex;flex-wrap:wrap;gap:5px;max-width:225px;align-items:center}
+.client-status-list .status{font-size:10px;padding:4px 7px}
+.client-more-status{color:#a995bf;font-size:11px;white-space:nowrap}
+@media(max-width:760px){.client-filter-bar>label{flex:1;min-width:145px}.client-result-count{width:100%;margin:0}.client-sort-btn{padding:11px 12px}}
