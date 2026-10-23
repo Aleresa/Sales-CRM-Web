@@ -37,7 +37,16 @@ function apiHeaders(){requireToken();return {"Authorization":"Bearer "+token,"Ac
 async function github(path,options={}){
  const response=await fetch(API+path,{...options,headers:{...apiHeaders(),...(options.headers||{})},cache:"no-store",referrerPolicy:"no-referrer"});
  if(!response.ok){
-  const reasons={401:"Токен неверный или просрочен.",403:"Недостаточно прав токена (для редактирования нужен Contents: Read and write).",404:"Репозиторий или файл не найден. Проверь доступ токена.",409:"Конфликт обновления. Повтори попытку."};
+  const isFile = path.startsWith("/contents/data/");
+  const fileName = isFile ? path.split("/").pop().split("?")[0] : "";
+  const reasons={
+   401:"Токен отклонён GitHub: проверь срок действия и правильность копирования.",
+   403:"GitHub отклонил запрос (403). Проверь Repository permissions → Contents (Read для просмотра, Read and write для изменений).",
+   404:isFile
+    ? "GitHub не дал прочитать файл "+fileName+". Репозиторий найден, но проверь права Contents: Read у токена."
+    : "GitHub не видит приватный репозиторий Aleresa/Sales-CRM с этим токеном. Укажи Resource owner: Aleresa → Repository access: Only select repositories → Sales-CRM (без -Web).",
+   409:"Конфликт обновления. Повтори попытку."
+  };
   throw new Error(reasons[response.status]||"Ошибка GitHub API: "+response.status);
  }
  return response.json();
