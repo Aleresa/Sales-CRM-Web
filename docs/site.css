@@ -56,3 +56,13 @@
 .group-delete{width:100%;background:transparent;border:1px solid #713c59;color:#eeadbd;border-radius:10px;padding:11px;margin-top:24px}
 .group-delete:hover{background:#482e3c}
 @media(max-width:650px){.group-grid{grid-template-columns:1fr}.group-create form{flex-direction:column;align-items:stretch}.group-create input{width:100%;max-width:none}.group-card-revenues b{font-size:15px}.sort-strip{justify-content:flex-start}.sort-control select{min-width:0;max-width:200px}}
+
+
+/* Consolidated customers: one real customer, multiple legal entities */
+.client-list-top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 17px}
+.client-view-controls{display:inline-flex;gap:4px;align-items:center;background:#29203b;border:1px solid #4a3b60;border-radius:12px;padding:4px}
+.client-view-controls button{border:0;border-radius:8px;color:#b6a8c7;background:transparent;padding:10px 16px;font-size:12px;font-weight:650;white-space:nowrap}
+.client-view-controls button:hover{color:#f6f0ff;background:#3b2c51}
+.client-view-controls button.active{background:#c7b3f0;color:#281b3d;box-shadow:0 2px 10px #10071d49}
+.client-subtitle{max-width:370px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px}
+@media(max-width:700px){.client-list-top{align-items:flex-start;flex-direction:column}.client-subtitle{max-width:225px}.client-view-controls{width:100%}.client-view-controls button{flex:1}}
