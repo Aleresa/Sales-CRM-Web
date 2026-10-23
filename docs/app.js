@@ -370,6 +370,11 @@ function renderClients(){
  const statusOptions='<option value="">Все статусы</option>'+allStatuses.map(value=>option(value,clientStatusFilter)).join("");
  const priorityOptions='<option value="">Все приоритеты</option>'+orderedPriorities.map(value=>option(value,clientPriorityFilter)).join("");
  const count=portfolio().length;
+ const retired=crmHiddenClients();
+ const retiredPanel='<details class="client-retired"><summary>Исключённые клиенты: '+fmt(retired.length)+' · показать / восстановить</summary>'
+  +(retired.length?'<div class="client-retired-list">'+retired.map(c=>
+   '<div><span>'+h(c.name)+'</span><button type="button" data-restore-client="'+attr(c.id)+'">Восстановить в CRM</button></div>'
+  ).join("")+'</div>':'<p class="tiny">Исключённых клиентов пока нет.</p>')+'</details>';
  const controls='<div class="client-view-controls" role="group" aria-label="Вид списка клиентов">'
   +'<button type="button" data-client-view="grouped" class="'+(byGroup?"active":"")+'">По клиентам</button>'
   +'<button type="button" data-client-view="legal" class="'+(!byGroup?"active":"")+'">По юрлицам</button></div>';
@@ -414,7 +419,7 @@ function renderClients(){
  +clientSortHeading("Статус","status")+clientSortHeading("Приоритет","priority")
  +clientSortHeading("Контакт","contact")+'</tr></thead>'
  +'<tbody>'+(items.length?rows:'<tr><td colspan="10">'+empty("Ничего не найдено","Измени фильтры или поисковый запрос")+'</td></tr>')+'</tbody>'
- +'</table></div></section><p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов. Колонка «С 23.10 · МойСклад» показывает новые отгрузки отдельно от сравнения январь–сентябрь; складывать эти периоды для оценки падения нельзя.</p>';
+ +'</table></div></section>'+retiredPanel+'<p class="note">Нажми заголовок колонки для сортировки ↑↓. В группе показываются статусы её участников и самый срочный приоритет. Фильтр «Статус» находит группу, если статус есть хотя бы у одного юрлица; фильтр «Приоритет» — по самому срочному в группе. Дата контакта — ближайшая из запланированных. Групповая выручка и заказы суммируются без двойного учёта контрагентов. Колонка «С 23.10 · МойСклад» показывает новые отгрузки отдельно от сравнения январь–сентябрь; складывать эти периоды для оценки падения нельзя.</p>';
 }
 function renderProducts(){
  const list=applySort(data.products.filter(p=>(p.name+" "+p.code+" "+p.category).toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru"))),"products");
@@ -546,6 +551,23 @@ function openClient(id){
  +'<button type="submit" class="primary save">Сохранить изменения в GitHub</button></form>';
  document.getElementById("close-modal").addEventListener("click",()=>modal.hidden=true);
 }
+async function crmSetHiddenClient(clientId,hide){
+ if(saving)return;
+ const target=crmAllClients().find(c=>c.id===clientId);
+ if(!target){notice("Клиент больше не найден в каталоге.",true);return;}
+ if(hide&&!confirm('Исключить из рабочих списков «'+target.name+'»?\n\nИстория продаж и заметки сохранятся. Клиент не появится снова после синхронизации. Его можно будет восстановить в разделе «Клиенты».'))return;
+ saving=true;
+ try{
+  data.crm=await writeJson("crm-state",state=>{
+   const ids=new Set(state.hiddenClientIds||[]);
+   if(hide)ids.add(clientId);else ids.delete(clientId);
+   return {...state,hiddenClientIds:[...ids].sort()};
+  },hide?"exclude inactive client":"restore excluded client");
+  modal.hidden=true;render();
+  notice(hide?'Клиент «'+target.name+'» убран из рабочих списков. Для возврата открой «Исключённые клиенты» внизу списка.':'Клиент «'+target.name+'» восстановлен.');
+ }catch(e){notice("Не удалось обновить клиента: "+e.message,true);}
+ finally{saving=false;}
+}
 async function updateClient(form){
  if(saving)return;
  const id=form.dataset.id;
@@ -615,6 +637,8 @@ document.getElementById("mobile-menu").addEventListener("click",()=>document.get
 document.getElementById("modal").addEventListener("click",event=>{if(event.target===modal)modal.hidden=true;});
 document.addEventListener("keydown",event=>{if(event.key==="Escape"){modal.hidden=true;document.getElementById("sidebar").classList.remove("open");}});
 root.addEventListener("click",event=>{
+ const restore=event.target.closest("[data-restore-client]");
+ if(restore){crmSetHiddenClient(restore.dataset.restoreClient,false);return;}
  const sortButton=event.target.closest("[data-client-sort]");
  if(sortButton){
   const key=sortButton.dataset.clientSort;
@@ -659,6 +683,10 @@ root.addEventListener("input",event=>{
 });
 root.addEventListener("submit",event=>{
  if(event.target.id!=="task-form")return;event.preventDefault();addTask(event.target);
+});
+document.getElementById("modal").addEventListener("click",event=>{
+ const hide=event.target.closest("[data-hide-client]");
+ if(hide)crmSetHiddenClient(hide.dataset.hideClient,true);
 });
 document.getElementById("modal").addEventListener("submit",event=>{
  if(event.target.id!=="client-form")return;event.preventDefault();updateClient(event.target);
