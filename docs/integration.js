@@ -37,12 +37,13 @@ function renderIntegration() {
   if (!msSync) return title +
     '<section class="panel"><div class="panel-head"><div><h2>Ожидается первая синхронизация</h2>' +
     '<p>Данные 2023–22.10.2026 и прежний складской снимок остаются доступны.</p></div></div>' +
-    '<p>Добавь новый API-токен в <b>Settings → Secrets and variables → Actions</b> приватного репозитория ' +
-    '<b>Sales-CRM</b> под именем <code>MOYSKLAD_TOKEN</code>. Запусти workflow <b>CRM / MoySklad sync</b>.' +
-    ' После первого успешного запуска здесь появится отметка обновления.</p>' +
-    '<p class="note">Токен «МойСклад» нельзя вводить на этой публичной странице. '+
-    'Если он уже был отправлен в чат, отзови его и создай новый. ' +
-    'Подключение не выполнено, пока GitHub Actions не завершится успешно.</p></section>';
+    '<p>Для бесплатной автоматизации используем <b>Google Apps Script</b> вместо GitHub Actions. ' +
+    'Открой <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer">Apps Script</a>, ' +
+    'скопируй код из приватного <b>Sales-CRM/integrations/google-apps-script/MoySkladSync.gs</b> и ' +
+    'укажи два токена в Project Settings → Script Properties. ' +
+    'Выполни функции <code>testConnections</code>, <code>syncMoySklad</code>, затем <code>installDailyTrigger</code>.</p>' +
+    '<p class="note">GitHub Actions из-за блокировки биллинга не используется. ' +
+    'Токены не вводятся на этом сайте и не публикуются в коде. При первом успешном запуске появится дата синхронизации.</p></section>';
   const records = Object.entries(msSync.salesByMonth).sort((a,b)=>b[0].localeCompare(a[0]));
   const moneySince = records.reduce((v,[,r])=>v+n(r.revenue),0);
   const knownNames = new Set((insights?.clients||[]).map(x=>String(x[0]).toLocaleLowerCase("ru")));
