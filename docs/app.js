@@ -193,13 +193,13 @@ function renderOverview(){
  const growth=m&&prev&&n(prev.revenue)?(n(m.revenue)/n(prev.revenue)-1)*100:null;
  const trend=growth===null?"Сравнение недоступно":'<span class="change '+(growth<0?"negative":"positive")+'">'+percent(growth)+'</span> к прошлому году';
  const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
- const tasks=data.crm.tasks.filter(t=>!["Закрыт","Заказ получен"].includes(t.status)).slice(0,5);
+ const tasks=taskBundles().filter(b=>b.openCount>0).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
  +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?fmt(m.orders):"—","▤","За выбранный месяц")+metric("Активных клиентов",m?fmt(m.active_clients):"—","♧","Покупатели за месяц")+metric("Средний чек",m?money(m.avg_check):"—","▥","Средняя сумма отгрузки")+'</section>'
  +'<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Динамика выручки</h2><p>Сравнение '+(year-1)+' и '+year+' годов</p></div><span class="mini-tag">12 месяцев</span></div>'+lineChart()+'</section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Товарные категории</h2><p>Крупнейшие категории · '+year+'</p></div><span class="mini-tag">TOP 7</span></div>'+categoryBars()+'</section></div>'
  +'<div class="lower"><section class="panel"><div class="panel-head"><div><h2>Клиенты, требующие внимания</h2><p>Наибольшее падение отгрузок, янв–сен 2025/2026</p></div><button class="panel-link" data-action="go" data-page="clients">Все клиенты →</button></div><div class="list">'+(clients.length?clients.map(clientButton).join(""):empty("Нет клиентов","Данные не загружены"))+'</div></section>'
- +'<section class="panel"><div class="panel-head"><div><h2>Задачи на контроле</h2><p>Открытые контакты и следующие шаги</p></div><button class="panel-link" data-action="go" data-page="tasks">Все задачи →</button></div><div class="list">'+(tasks.length?tasks.map(t=>'<div class="item"><span class="initial">☷</span><span class="grow"><b>'+h(t.title)+'</b><small>'+h(t.client_name||"Без клиента")+'</small></span><span class="tiny">'+h(dateOut(t.due_on))+'</span></div>').join(""):empty("Нет задач","Создай первую задачу во вкладке «Задачи»"))+'</div></section></div>'
+ +'<section class="panel"><div class="panel-head"><div><h2>Задачи на контроле</h2><p>Открытые контакты и следующие шаги</p></div><button class="panel-link" data-action="go" data-page="tasks">Все задачи →</button></div><div class="list">'+(tasks.length?tasks.map(t=>'<div class="item"><span class="initial">☷</span><span class="grow"><b>'+h(t.name)+'</b><small>'+h(t.openCount)+' задач · '+h(t.anchor.title)+'</small></span><span class="tiny">'+h(dateOut(t.due_on))+'</span></div>').join(""):empty("Нет задач","Создай первую задачу во вкладке «Задачи»"))+'</div></section></div>'
  +'<p class="note">Показатели из выгрузки на 22.10.2026. Октябрь 2026 неполный и не сопоставим напрямую с полным октябрём 2025. ₽ — условная валюта исходного анализа.</p>';
 }
 function statusBadge(v){return '<span class="status">'+h(v||"К работе")+'</span>';}
@@ -282,18 +282,71 @@ function renderCategories(){
  +rows.map(c=>{const d=c.current-c.prev;return '<tr><td class="long">'+h(c.category)+'</td><td>'+money(c.prev)+'</td><td>'+money(c.current)+'</td><td class="'+(d<0?"loss":"gain")+'">'+(d<0?"−":"+")+money(Math.abs(d))+'</td><td class="'+(d<0?"loss":"gain")+'">'+(c.prev?percent(d/c.prev*100):"—")+'</td></tr>';}).join("")
  +'</tbody></table></div></section>';
 }
+function taskClient(t){
+ const group=groups().find(g=>g.id===t.groupId || g.name.toLocaleLowerCase("ru")===String(t.client_name||"").toLocaleLowerCase("ru"));
+ if(group)return {key:"group:"+group.id,name:group.name,groupId:group.id};
+ const person=customers().find(c=>c.name.toLocaleLowerCase("ru")===String(t.client_name||"").toLocaleLowerCase("ru"));
+ if(person){
+  const parent=groupForClient(person.id);
+  if(parent)return {key:"group:"+parent.id,name:parent.name,groupId:parent.id};
+  return {key:"person:"+person.id,name:person.name};
+ }
+ return {key:"free:"+String(t.client_name||t.id),name:t.client_name||"Без клиента"};
+}
+function taskBundles(){
+ const result=new Map();
+ for(const task of data.crm.tasks){
+  const account=taskClient(task);
+  const key=account.groupId?"g:"+account.groupId: "task:"+task.id;
+  if(!result.has(key))result.set(key,{...account,tasks:[]});
+  result.get(key).tasks.push(task);
+ }
+ return [...result.values()].map(x=>{
+  x.tasks.sort((a,b)=>(a.due_on||"9999").localeCompare(b.due_on||"9999"));
+  const open=x.tasks.filter(t=>!["Закрыт","Заказ получен"].includes(t.status));
+  const anchor=open[0]||x.tasks[0];
+  x.anchor=anchor;
+  x.stage=open.length?anchor.status:anchor.status;
+  x.due_on=anchor.due_on;
+  x.priority=open.some(t=>t.priority==="Срочно")?"Срочно":open.some(t=>t.priority==="Высокий")?"Высокий":"Обычный";
+  x.openCount=open.length;
+  return x;
+ });
+}
+function taskEntityOptions(){
+ const groupsAsOptions=groups().slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"))
+  .map(g=>'<option value="g:'+attr(g.id)+'">♧ '+h(g.name)+' · '+(g.clientIds||[]).length+' юрлиц</option>');
+ const assigned=new Set(groups().flatMap(g=>g.clientIds||[]));
+ const independent=customers().filter(c=>!assigned.has(c.id)).sort((a,b)=>a.name.localeCompare(b.name,"ru"))
+  .map(c=>'<option value="c:'+attr(c.id)+'">'+h(c.name)+'</option>');
+ return '<option value="">Выбрать клиента (необязательно)</option><optgroup label="Группы клиентов">'+groupsAsOptions.join("")+'</optgroup><optgroup label="Отдельные контрагенты">'+independent.join("")+'</optgroup>';
+}
+
 function renderTasks(){
- const tasks=data.crm.tasks;
- const headings=STAGES;
- const total=tasks.filter(t=>!["Закрыт","Заказ получен"].includes(t.status)).length;
- return header("Задачи и контакты","Канбан-доска и следующие шаги для клиентов.",'<span class="mini-tag">Открыто: '+total+'</span>')
- +'<section class="panel create-task"><h2>＋ Создать задачу</h2><form id="task-form" class="create-grid"><input name="title" required maxlength="300" placeholder="Например: позвонить клиенту" aria-label="Задача"><input name="client" maxlength="220" placeholder="Клиент" aria-label="Клиент"><input name="due" type="date" aria-label="Срок"><select name="priority" aria-label="Приоритет">'+PRIORITIES.map(v=>option(v,"Обычный")).join("")+'</select><button class="primary" type="submit">Добавить</button></form></section>'
- +'<div class="board">'+headings.map(stage=>{
-  const cards=tasks.filter(t=>t.status===stage);
-  return '<section class="column"><h2>● '+h(stage)+' · '+cards.length+'</h2>'
-  +cards.map(t=>'<article class="task"><div class="task-top">'+priorityBadge(t.priority)+'<span class="date '+(t.due_on&&t.due_on<new Date().toISOString().slice(0,10)?"late":"")+'">'+h(dateOut(t.due_on))+'</span></div><h3>'+h(t.title)+'</h3><small>'+h(t.client_name||"Без клиента")+'</small><select aria-label="Изменить статус" data-task-id="'+attr(t.id)+'">'+STAGES.map(v=>option(v,t.status)).join("")+'</select></article>').join("")
-  +'</section>';
- }).join("")+'</div>';
+ const bundles=taskBundles();
+ const total=bundles.filter(b=>b.openCount>0).length;
+ return header("Задачи и контакты","Одна карточка на реального клиента. Внутри — задачи всех его юридических лиц.",'<span class="mini-tag">Клиентов с открытыми задачами: '+total+'</span>')
+ +'<section class="panel create-task"><h2>＋ Новая задача</h2><form id="task-form" class="create-grid">'
+ +'<input name="title" required maxlength="300" placeholder="Например: обсудить закупку" aria-label="Задача">'
+ +'<select name="client" aria-label="Реальный клиент">'+taskEntityOptions()+'</select>'
+ +'<input name="due" type="date" aria-label="Срок">'
+ +'<select name="priority" aria-label="Приоритет">'+PRIORITIES.map(v=>option(v,"Обычный")).join("")+'</select>'
+ +'<button class="primary" type="submit">Добавить</button></form></section>'
+ +'<div class="board">'+STAGES.map(stage=>{
+  const cards=bundles.filter(b=>b.stage===stage);
+  return '<section class="column"><h2>● '+h(stage)+' · '+cards.length+' клиентов</h2>'
+   +cards.map(bundle=>{
+     const isGroup=!!bundle.groupId;
+     const head=(isGroup?'<button type="button" class="task-group-link" data-action="group" data-id="'+attr(bundle.groupId)+'">'+h(bundle.name)+' ↗</button>':'<strong>'+h(bundle.name)+'</strong>');
+     const rows=bundle.tasks.map(t=>'<div class="task-subitem"><div class="task-subtitle">'+h(t.title)+'</div>'
+      +'<div class="task-submeta"><span class="tiny">'+(isGroup?h(t.client_name||bundle.name)+" · ":"")+h(dateOut(t.due_on))+'</span>'
+      +'<select aria-label="Статус задачи" data-task-id="'+attr(t.id)+'">'+STAGES.map(v=>option(v,t.status)).join("")+'</select></div></div>').join("");
+     return '<article class="task group-task"><div class="task-top">'+priorityBadge(bundle.priority)+'<span class="date '+(bundle.due_on&&bundle.due_on<new Date().toISOString().slice(0,10)?"late":"")+'">'+h(dateOut(bundle.due_on))+'</span></div>'
+      +'<div class="task-account">'+head+'</div>'
+      +(bundle.tasks.length>1?'<div class="tiny">'+bundle.tasks.length+' задачи внутри группы</div>':'')
+      +'<div class="task-sublist">'+rows+'</div></article>';
+   }).join("")+'</section>';
+ }).join("")+'</div><p class="note">Исходные задачи юрлиц не удалены: они собраны под общим клиентом. Каждая задача сохраняет собственный срок и статус.</p>';
 }
 function render(){
  clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи"})[page];
@@ -345,15 +398,28 @@ async function addTask(form){
  if(saving)return;
  const raw=new FormData(form);const title=String(raw.get("title")||"").trim();
  if(!title)return;
+ const entity=String(raw.get("client")||"");
+ let groupId=null,clientName="";
+ if(entity.startsWith("g:")){
+  const group=groups().find(g=>g.id===entity.slice(2));
+  if(!group){notice("Выбранная группа не найдена",true);return;}
+  groupId=group.id;clientName=group.name;
+ }else if(entity.startsWith("c:")){
+  const c=customers().find(c=>c.id===entity.slice(2));
+  if(!c){notice("Клиент не найден",true);return;}
+  const group=groupForClient(c.id);
+  groupId=group?.id||null;clientName=group?.name||c.name;
+ }
  const id="t-"+crypto.randomUUID();
- const task={id,title,client_name:String(raw.get("client")||"").trim(),due_on:String(raw.get("due"))||null,status:"К работе",priority:String(raw.get("priority")||"Обычный"),created_at:new Date().toISOString()};
+ const task={id,title,client_name:clientName,groupId,due_on:String(raw.get("due"))||null,status:"К работе",priority:String(raw.get("priority")||"Обычный"),created_at:new Date().toISOString()};
  saving=true;form.querySelector("button").disabled=true;
  try{
-  data.crm=await writeJson("crm-state",s=>({...s,tasks:[...(s.tasks||[]),task]}),"create task");
-  render();notice("Задача создана и сохранена.");
+  data.crm=await writeJson("crm-state",state=>({...state,tasks:[...(state.tasks||[]),task]}),"create group-linked task");
+  render();notice("Задача сохранена под реальным клиентом.");
  }catch(e){notice(e.message,true);}
  finally{saving=false;if(form.isConnected)form.querySelector("button").disabled=false;}
 }
+
 document.getElementById("auth-form").addEventListener("submit",async event=>{
  event.preventDefault();
  const input=document.getElementById("token"),error=document.getElementById("auth-error"),button=event.target.querySelector("button");
