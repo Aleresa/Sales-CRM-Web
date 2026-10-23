@@ -415,9 +415,9 @@ function renderTasks(){
  }).join("")+'</div><p class="note">Исходные задачи юрлиц не удалены: они собраны под общим клиентом. Каждая задача сохраняет собственный срок и статус.</p>';
 }
 function render(){
- clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",opportunities:"Остатки и рост",lost:"Потерянные клиенты"})[page];
+ clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",opportunities:"Остатки и рост",lost:"Потерянные клиенты",integration:"МойСклад · обновление"})[page];
  document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
- root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,opportunities:displayStockOpportunities,lost:displayLostClients})[page]();
+ root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,opportunities:displayStockOpportunities,lost:displayLostClients,integration:renderIntegration})[page]();
 }
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
@@ -498,11 +498,12 @@ document.getElementById("auth-form").addEventListener("submit",async event=>{
   await loadData();
   await loadRecoveryData();
   await loadInsights();
+  await loadIntegration();
   input.value="";auth.hidden=true;shell.hidden=false;render();
  }catch(e){token="";error.textContent=e.message;error.hidden=false;}
  finally{button.disabled=false;button.innerHTML="Открыть мою CRM <span>→</span>";}
 });
-document.getElementById("disconnect").addEventListener("click",()=>{token="";data={monthly:[],clients:[],categories:[],products:[],crm:{tasks:[],clientOverrides:{}}};shell.hidden=true;auth.hidden=false;document.getElementById("token").value="";modal.hidden=true;});
+document.getElementById("disconnect").addEventListener("click",()=>{token="";data={monthly:[],clients:[],categories:[],products:[],crm:{tasks:[],clientOverrides:{}}};shell.hidden=true;auth.hidden=false;document.getElementById("token").value="";modal.hidden=true;msSync=null;});
 document.getElementById("nav").addEventListener("click",event=>{const b=event.target.closest("[data-page]");if(b)navigate(b.dataset.page);});
 document.getElementById("mobile-menu").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
 document.getElementById("modal").addEventListener("click",event=>{if(event.target===modal)modal.hidden=true;});
