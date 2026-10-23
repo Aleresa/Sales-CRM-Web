@@ -625,6 +625,28 @@ async function addTask(form){
  finally{saving=false;if(form.isConnected)form.querySelector("button").disabled=false;}
 }
 
+/* The browser refreshes a completed private snapshot automatically while the
+   user stays logged in. No background server and no manual assistant update. */
+let crmSyncRefreshBusy=false,crmSyncLastPoll=0;
+async function crmRefreshSyncedData(){
+ if(!token||shell.hidden||crmSyncRefreshBusy||Date.now()-crmSyncLastPoll<120000)return;
+ crmSyncRefreshBusy=true;crmSyncLastPoll=Date.now();
+ try{
+  const response=await fileRead("moysklad-sync");
+  const next=response.value;
+  if(next?.schema_version!==1||!next.complete||!Array.isArray(next.stock)||!next.as_of)return;
+  if(next.as_of===msSync?.as_of)return;
+  msSync=next;
+  if(typeof insights!=="undefined"&&insights)insights.stock=next.stock;
+  render();
+  notice("Продажи, складские остатки и контрагенты обновлены автоматически.");
+ }catch(e){
+  console.warn("CRM sync refresh failed (previous data retained)",e);
+ }finally{crmSyncRefreshBusy=false;}
+}
+setInterval(crmRefreshSyncedData,15*60*1000);
+window.addEventListener("focus",crmRefreshSyncedData);
+
 document.getElementById("auth-form").addEventListener("submit",async event=>{
  event.preventDefault();
  const input=document.getElementById("token"),error=document.getElementById("auth-error"),button=event.target.querySelector("button");
