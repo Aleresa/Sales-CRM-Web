@@ -128,9 +128,9 @@ function renderRecovery() {
   +'<th>2025, ₽</th><th>2026, ₽</th><th>Падение, ₽</th><th>Шт. 2025 → 2026</th></tr></thead><tbody>'
   +(subset.length?subset.map(r=>'<tr><td><input type="checkbox" class="recovery-check" data-recovery-sku="'+attr(r.code)+'"'+(selection.has(r.code)?" checked":"")+' aria-label="Выбрать '+attr(r.name)+'"></td>'
     +'<td class="long"><b>'+h(r.name)+'</b><div class="tiny">'+h(r.category)+' '
-    +(r.gone?'<span class="recovery-flag">Не закупают</span>':'<span class="recovery-flag continues">Сократили</span>')+'</div></td>'
+    +(r.gone?'<span class="recovery-flag">Не закупают</span>':r.loss>0?'<span class="recovery-flag continues">Сократили</span>':r.r25<=0?'<span class="recovery-flag continues">Новая позиция</span>':'<span class="recovery-flag continues">Покупают</span>')+'</div></td>'
     +'<td>'+h(r.code)+'</td><td>'+money(r.r25)+'</td><td>'+money(r.r26)+'</td>'
-    +'<td class="loss">−'+money(r.loss)+'</td><td>'+fmt(r.q25)+' → '+fmt(r.q26)+'</td></tr>').join("")
+    +'<td class="loss">'+(r.loss>0?"−"+money(r.loss):"—")+'</td><td>'+fmt(r.q25)+' → '+fmt(r.q26)+'</td></tr>').join("")
     :'<tr><td colspan="7">'+empty("Нет позиций по фильтру","Измените фильтр или поисковый запрос.")+'</td></tr>')
   +'</tbody></table></div></section>';
  const actions='<div class="recovery-actions"><button type="button" class="primary" data-recovery-action="save">Сохранить список</button>'
