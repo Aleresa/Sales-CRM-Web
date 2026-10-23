@@ -129,8 +129,21 @@ function crmVirtualClients(){
  }
  return all;
 }
-function customers(){
+function crmAllClients(){
  return [...data.clients,...crmVirtualClients()].map(c=>({...c,...(data.crm.clientOverrides?.[c.id]||{})}));
+}
+function crmHiddenIds(){return new Set(data.crm.hiddenClientIds||[]);}
+function customers(){
+ const hidden=crmHiddenIds();
+ return crmAllClients().filter(c=>!hidden.has(c.id));
+}
+function crmHiddenClients(){
+ const hidden=crmHiddenIds();
+ return crmAllClients().filter(c=>hidden.has(c.id)).sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+}
+function crmIsHiddenClientName(name){
+ const key=crmNameKey(name);
+ return crmHiddenClients().some(c=>crmNameKey(c.name)===key);
 }
 function groups(){
  return Array.isArray(data.crm.groups) ? data.crm.groups : [];
@@ -248,24 +261,20 @@ function renderOverview(){
  const growth=m&&prev&&n(prev.revenue)?(n(m.revenue)/n(prev.revenue)-1)*100:null;
  const trend=growth===null?"Сравнение недоступно":'<span class="change '+(growth<0?"negative":"positive")+'">'+percent(growth)+'</span> к прошлому году';
  const merged=m?.combined;
- const oldOrdersFooter=merged?"До 22.10; новых документов: "+fmt(m.sync_docs):"За выбранный месяц";
- const oldActiveFooter=merged?"До 22.10. Новые покупатели отдельно не суммируются.":"Покупатели за месяц";
- const oldAvgFooter=merged?"До 22.10; средний чек новых отгрузок пока отдельно.":"Средняя сумма отгрузки";
- const monthBridge=merged?'<div class="sales-bridge" role="status">'
-  +'<div><span>История до 22 октября</span><strong>'+money(m.archive_revenue)+'</strong></div>'
-  +'<span class="sales-bridge-sign">＋</span><div><span>МойСклад с 23 октября</span><strong>'+money(m.sync_revenue)+'</strong><small>'+fmt(m.sync_docs)+' документов · '+fmt(m.sync_units)+' шт.</small></div>'
-  +'<span class="sales-bridge-sign">＝</span><div class="sales-bridge-total"><span>Общая выручка за месяц</span><strong>'+money(m.revenue)+'</strong></div></div>':"";
+ const oldOrdersFooter=merged?"Количество из архивного отчёта; новые документы пока не суммируются":"За выбранный месяц";
+ const oldActiveFooter=merged?"Число уникальных покупателей уточняется":"Покупатели за месяц";
+ const oldAvgFooter=merged?"Средний чек уточняется с учётом новых документов":"Средняя сумма отгрузки";
+
  const clients=portfolio().filter(c=>n(c.previous_revenue)>n(c.current_revenue)).sort((a,b)=>(n(a.current_revenue)-n(a.previous_revenue))-(n(b.current_revenue)-n(b.previous_revenue))).slice(0,5);
  const tasks=taskBundles().filter(b=>b.openCount>0).slice(0,5);
  return header("Обзор продаж","Данные из приватного репозитория. Месяц выбирается автоматически.",selectedMonth())
- +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric(merged?"Заказы · старый отчёт":"Заказы",m?.orders!=null?fmt(m.orders):"—","▤",oldOrdersFooter)+metric(merged?"Активных · старый отчёт":"Активных клиентов",m?.active_clients!=null?fmt(m.active_clients):"—","♧",oldActiveFooter)+metric(merged?"Средний чек · старый отчёт":"Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",oldAvgFooter)+'</section>'
- +monthBridge
+ +'<section class="metric-grid">'+metric("Выручка · нетто",m?money(m.revenue):"—","◈",trend)+metric("Заказы",m?.orders!=null?fmt(m.orders):"—","▤",oldOrdersFooter)+metric("Активных клиентов",m?.active_clients!=null?fmt(m.active_clients):"—","♧",oldActiveFooter)+metric("Средний чек",m?.avg_check!=null?money(m.avg_check):"—","▥",oldAvgFooter)+'</section>'
  +'<div class="two-col"><section class="panel"><div class="panel-head"><div><h2>Динамика выручки</h2><p>Сравнение '+(year-1)+' и '+year+' годов</p></div><span class="mini-tag">12 месяцев</span></div>'+lineChart()+'</section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Товарные категории</h2><p>Крупнейшие категории · '+year+'</p></div><span class="mini-tag">TOP 7</span></div>'+categoryBars()+'</section></div>'
  +'<div class="lower"><section class="panel"><div class="panel-head"><div><h2>Клиенты, требующие внимания</h2><p>Наибольшее падение отгрузок, янв–сен 2025/2026</p></div><button class="panel-link" data-action="go" data-page="clients">Все клиенты →</button></div><div class="list">'+(clients.length?clients.map(clientButton).join(""):empty("Нет клиентов","Данные не загружены"))+'</div></section>'
  +'<section class="panel"><div class="panel-head"><div><h2>Задачи на контроле</h2><p>Открытые контакты и следующие шаги</p></div><button class="panel-link" data-action="go" data-page="tasks">Все задачи →</button></div><div class="list">'+(tasks.length?tasks.map(t=>'<div class="item"><span class="initial">☷</span><span class="grow"><b>'+h(t.name)+'</b><small>'+h(t.openCount)+' задач · '+h(t.anchor.title)+'</small></span><span class="tiny">'+h(dateOut(t.due_on))+'</span></div>').join(""):empty("Нет задач","Создай первую задачу во вкладке «Задачи»"))+'</div></section></div>'
  +'<p class="note">'+(merged?
-  'Выручка и график объединяют архив до 22.10.2026 с отгрузками и возвратами группы из «МойСклад» с 23.10.2026. Заказы, активные клиенты и средний чек показаны только по архивному периоду: без документной сверки они не суммируются. Октябрь ещё не завершён.':
+  'Продажи автоматически обновляются. Выручка учитывает новые отгрузки и возвраты без повторного сложения. Число заказов, активных покупателей и средний чек ещё не включают новые документы, пока не настроен единый подсчёт. Октябрь неполный.':
   'Данные архивных отчётов; обновление через «МойСклад» применяется к периодам начиная с 23.10.2026. Для сравнений января–сентября используется неизменная история.'
  )+'</p>';
 }
@@ -526,7 +535,7 @@ function openClient(id){
       :'<p class="tiny">Сначала создай группу в разделе «Группы клиентов».</p>')+'</div>')
  +'<button type="button" class="recovery-client-label" data-recovery-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">↗ Разбор закупок и товары для возврата</button>'
  +'<button type="button" class="recovery-client-label" data-insight-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">◈ Остатки и точки роста 2023–2026</button>'
- +(c.source?'<p class="client-source-note">Источник: '+h(c.source==="archive"?"история 2023–2026":c.source==="moysklad"?"контрагенты МойСклад":c.source)+'</p>':"")
+ +'<div class="client-action-danger"><button type="button" data-hide-client="'+attr(c.id)+'">Убрать клиента из CRM</button><small>Пропадёт из рабочих списков и не вернётся после синхронизации. История продаж сохранится.</small></div>'
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Отгрузки 2026</span><b>'+money(c.current_revenue)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
