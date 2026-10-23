@@ -124,9 +124,11 @@ function candidateData(account){
   if(previous&&pastRevenue>0&&returnLoss>0)mode="return";
   else if(!previous&&groupDemand&&otherBuyers>1500&&otherQty>0)mode="adjacent";
   else if(!previous&&otherBuyers>5000&&otherQty>3)mode="market";
+  else if(!previous&&groupDemand&&otherBuyers===0&&available>=10&&salePrice>0)mode="hypothesis";
   if(!mode)continue;
   let score=mode==="return"?returnLoss*2+stockCover*salePrice
    :mode==="adjacent"?(groupDemand?.[1]||0)*0.1+Math.min(available,otherQty)*salePrice
+   :mode==="hypothesis"?Math.min(available,100)*salePrice*0.3
    :Math.min(available,otherQty)*salePrice;
   result.push({code,name,category,mode,available,reserved,price:salePrice,pastQty,currentQty,
     pastRevenue,currentRevenue,otherBuyers,otherQty,score,loss:returnLoss,stockCover});
@@ -188,12 +190,14 @@ function displayStockOpportunities(){
  +stockMetric("Свободный остаток",fmt(stock.reduce((s,p)=>s+n(p[1]),0))+" шт.","все позиции, 23.10.2026")
  +'</div>';
  const pills='<div class="opp-tabs">'
- +[["return","Вернуть прошлые позиции"],["adjacent","Смежный ассортимент"],["market","Спрос у других клиентов"]].map(([key,title])=>
+ +[["return","Вернуть прошлые позиции"],["adjacent","Смежный ассортимент"],["market","Спрос у других клиентов"],["hypothesis","Складские гипотезы"]].map(([key,title])=>
   '<button type="button" data-opp-mode="'+key+'" class="'+(opportunityMode===key?"active":"")+'">'+title+'</button>').join("")+'</div>';
  const notes=opportunityMode==="return"
   ?"Только SKU, которые клиент реально закупал, затем сократил, и которые доступны на складе. Данные по SKU — отобранные позиции из истории, не полная товарная корзина."
   :opportunityMode==="adjacent"
   ?"Гипотезы: товары из знакомых клиенту категорий со складом и подтверждённым спросом по другим клиентам. Отсутствие SKU в выборке не доказывает, что он никогда его не покупал."
+  :opportunityMode==="hypothesis"
+  ?"Новые складские позиции из знакомых клиенту категорий без подтверждённого спроса по отгрузкам. Это гипотеза для тестового предложения, а не прогноз."
   :"Потенциальные предложения со складом и отгрузками другим клиентам. Это не персонально подтверждённый спрос.";
  const searchRow='<div class="opp-topline"><p class="recovery-description">'+h(notes)+'</p><label class="search">⌕ <input id="opportunity-search" value="'+attr(opportunitySearch)+'" placeholder="Код, товар, группа…"></label></div>';
  const body=matched.slice(0,150).map(r=>'<tr><td><input type="checkbox" class="recovery-check" data-opp-code="'+attr(r.code)+'"'
@@ -203,7 +207,7 @@ function displayStockOpportunities(){
   +'<td>'+money(r.pastRevenue)+'</td><td>'+money(r.currentRevenue)+'</td>'
   +'<td><b class="gain">'+fmt(r.available)+' шт.</b><div class="tiny">резерв: '+fmt(r.reserved)+'</div></td>'
   +'<td>'+money(r.price)+'</td>'
-  +'<td>'+(r.mode==="return"?money(r.stockCover*r.price):'Спрос других: '+fmt(r.otherQty)+' шт.')+'</td></tr>').join("");
+  +'<td>'+(r.mode==="return"?money(r.stockCover*r.price):r.mode==="hypothesis"?"Гипотеза, нет отгрузок":'Спрос других: '+fmt(r.otherQty)+' шт.')+'</td></tr>').join("");
  const table='<section class="panel"><div class="panel-head"><div><h2>Позиции для обсуждения</h2><p>В наличии на дату выгрузки: 23 октября 2026</p></div><span class="mini-tag">'+matched.length+' вариантов</span></div>'
  +'<div class="table-wrap"><table class="data-table"><thead><tr><th>Выбрать</th><th>Товар</th><th>Код</th><th>'+opportunityYear+'</th><th>2026</th><th>Доступно</th><th>Цена из остатков</th><th>Ориентир</th></tr></thead>'
  +'<tbody>'+(body||'<tr><td colspan="8">'+empty("Нет подходящих позиций","Измени год или режим подбора")+'</td></tr>')+'</tbody></table></div></section>';
