@@ -349,9 +349,9 @@ function renderTasks(){
  }).join("")+'</div><p class="note">Исходные задачи юрлиц не удалены: они собраны под общим клиентом. Каждая задача сохраняет собственный срок и статус.</p>';
 }
 function render(){
- clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи"})[page];
+ clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж"})[page];
  document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
- root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks})[page]();
+ root.innerHTML=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery})[page]();
 }
 function navigate(v){page=v;search="";document.getElementById("sidebar").classList.remove("open");render();window.scrollTo({top:0,behavior:"instant"});}
 function openClient(id){
@@ -362,6 +362,7 @@ function openClient(id){
  document.getElementById("drawer-body").innerHTML=
  '<div class="drawer-top"><div class="eyebrow">КАРТОЧКА КЛИЕНТА</div><button class="icon-btn" id="close-modal" aria-label="Закрыть">×</button></div><h2>'+h(c.name)+'</h2><p>'+h(c.category||c.segment||"Клиент")+'</p>'
  +(group?'<button type="button" class="small-btn" data-open-group="'+attr(group.id)+'">♧ Группа '+h(group.name)+' →</button>':'<p class="tiny">Контрагент пока не привязан к группе</p>')
+ +'<button type="button" class="recovery-client-label" data-recovery-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">↗ Разбор закупок и товары для возврата</button>'
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Отгрузки 2026</span><b>'+money(c.current_revenue)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
@@ -428,6 +429,7 @@ document.getElementById("auth-form").addEventListener("submit",async event=>{
   const repo=await github("");
   if(repo.full_name!==REPO || !repo.private)throw new Error("Не удалось подтвердить приватный репозиторий.");
   await loadData();
+  await loadRecoveryData();
   input.value="";auth.hidden=true;shell.hidden=false;render();
  }catch(e){token="";error.textContent=e.message;error.hidden=false;}
  finally{button.disabled=false;button.innerHTML="Открыть мою CRM <span>→</span>";}
@@ -445,6 +447,7 @@ root.addEventListener("click",event=>{
  if(el.dataset.action==="go")navigate(el.dataset.page);
  if(el.dataset.action==="client")openClient(el.dataset.id);
  if(el.dataset.action==="group")openGroup(el.dataset.id);
+ if(el.dataset.action==="recovery"){recoveryEntity=el.dataset.id;navigate("recovery");}
  if(el.dataset.action==="reverse-sort"){
   if(el.dataset.kind==="products")productReverse=!productReverse;
   else categoryReverse=!categoryReverse;
