@@ -517,9 +517,16 @@ function openClient(id){
  const delta=n(c.current_revenue)-n(c.previous_revenue);
  document.getElementById("drawer-body").innerHTML=
  '<div class="drawer-top"><div class="eyebrow">КАРТОЧКА КЛИЕНТА</div><button class="icon-btn" id="close-modal" aria-label="Закрыть">×</button></div><h2>'+h(c.name)+'</h2><p>'+h(c.category||c.segment||"Клиент")+'</p>'
- +(group?'<button type="button" class="small-btn" data-open-group="'+attr(group.id)+'">♧ Группа '+h(group.name)+' →</button>':'<p class="tiny">Контрагент пока не привязан к группе</p>')
+ +(group?'<button type="button" class="small-btn" data-open-group="'+attr(group.id)+'">♧ Группа '+h(group.name)+' →</button>'
+   :'<div class="client-assign-group"><label>Привязать юрлицо к группе</label>'
+   +(groups().length?'<div><select id="client-group-picker" aria-label="Выбери группу">'
+      +'<option value="">Выбери группу клиентов…</option>'
+      +groups().map(g=>'<option value="'+attr(g.id)+'">'+h(g.name)+'</option>').join("")
+      +'</select><button type="button" class="small-btn" id="assign-client-to-group" data-client-id="'+attr(c.id)+'">＋ Добавить</button></div>'
+      :'<p class="tiny">Сначала создай группу в разделе «Группы клиентов».</p>')+'</div>')
  +'<button type="button" class="recovery-client-label" data-recovery-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">↗ Разбор закупок и товары для возврата</button>'
  +'<button type="button" class="recovery-client-label" data-insight-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">◈ Остатки и точки роста 2023–2026</button>'
+ +(c.source?'<p class="client-source-note">Источник: '+h(c.source==="archive"?"история 2023–2026":c.source==="moysklad"?"контрагенты МойСклад":c.source)+'</p>':"")
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Отгрузки 2026</span><b>'+money(c.current_revenue)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
