@@ -45,6 +45,8 @@ function skuCompareMap(){
 function allCustomerHistory(){
  if(!insights)return [];
  const historic=historicMap(),result=[],used=new Set();
+ const hiddenNames=new Set(crmHiddenClients().map(c=>crmNameKey(c.name)));
+ const activeByName=new Map(customers().map(c=>[crmNameKey(c.name),c]));
  for(const group of groups()){
   const members=groupMembers(group);
   const names=members.map(c=>c.name);
@@ -58,8 +60,10 @@ function allCustomerHistory(){
  }
  // Treat remaining historic buyers as independent, including buyers lost before 2025.
  for(const row of insights.clients){
-  const name=row[0];if(used.has(name))continue;
-  const found=customers().find(c=>c.name===name);
+  const name=row[0],key=crmNameKey(name);
+  if(used.has(name)||hiddenNames.has(key))continue;
+  const found=activeByName.get(key);
+  // Include all archive-only historical buyers; they now have stable editable cards.
   result.push({id:found?"c:"+found.id:"h:"+name,name,names:[name],
     amounts:row.slice(1,5).map(n),orders:row.slice(9,13).map(n),
     memberCount:1,linked:false,historicalOnly:!found});
@@ -150,7 +154,7 @@ function histInfoUnavailable(pageName){
 let contactSearch = "";
 let contactCache = null;
 function contactQueue(){
- const key=[insights,insights?.stock,msSync,data.crm.groups,data.crm.clientOverrides];
+ const key=[insights,insights?.stock,msSync,data.crm.groups,data.crm.clientOverrides,data.crm.hiddenClientIds];
  if(contactCache&&key.every((v,i)=>contactCache.key[i]===v))return contactCache.rows;
  const stock=stockMap(),fresh=new Map();
  for(const c of msSync?.salesByClient||[]){
