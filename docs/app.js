@@ -95,8 +95,42 @@ async function loadData(){
  data.monthly=files[0].value;data.clients=files[1].value;
  data.categories=files[2].value;data.products=files[3].value;data.crm=files[4].value;
 }
+/* Unified client catalog: archive-only buyers (including 2023) and all
+   tagged MoySklad counterparties are first-class CRM clients. Source datasets
+   stay immutable. Stable virtual IDs keep group links and notes across logins
+   and repeated daily imports. No customer data is embedded in the public site. */
+function crmNameKey(value){
+ return String(value||"").trim().replace(/\\s+/g," ").toLocaleLowerCase("ru-RU");
+}
+function crmVirtualClients(){
+ const base=new Set(data.clients.map(c=>crmNameKey(c.name)));
+ const all=[],historic=typeof insights!=="undefined"&&Array.isArray(insights?.clients)?insights.clients:[];
+ for(const row of historic){
+  const name=String(row[0]||"").trim(),key=crmNameKey(name);
+  if(!key||base.has(key))continue;
+  base.add(key);
+  all.push({id:"hist:"+encodeURIComponent(key),name,
+   previous_revenue:n(row[3]),current_revenue:n(row[4]),
+   orders_previous:n(row[11]),orders_current:n(row[12]),last_order_on:null,
+   category:"Исторический контрагент",segment:"Из истории 2023–2026",
+   priority:"Обычный",status:"К работе",source:"archive",source_note:"Архивные отгрузки 2023–2026"});
+ }
+ const synced=typeof msSync!=="undefined"&&Array.isArray(msSync?.counterparties)?msSync.counterparties:[];
+ for(const record of synced){
+  if(!Array.isArray(record)||record.length<2)continue;
+  const msId=String(record[0]||"").trim(),name=String(record[1]||"").trim();
+  const key=crmNameKey(name);
+  if(!msId||!key||base.has(key))continue;
+  base.add(key);
+  all.push({id:"ms:"+msId,name,
+   previous_revenue:0,current_revenue:0,orders_previous:0,orders_current:0,
+   last_order_on:null,category:"Контрагент МойСклад",segment:"Из группы «"+msSync.counterparty_group+"»",
+   priority:"Обычный",status:"К работе",source:"moysklad",source_note:"Подтянут автоматически из МойСклад"});
+ }
+ return all;
+}
 function customers(){
- return data.clients.map(c=>({...c,...(data.crm.clientOverrides?.[c.id]||{})}));
+ return [...data.clients,...crmVirtualClients()].map(c=>({...c,...(data.crm.clientOverrides?.[c.id]||{})}));
 }
 function groups(){
  return Array.isArray(data.crm.groups) ? data.crm.groups : [];
@@ -499,7 +533,7 @@ function openClient(id){
 async function updateClient(form){
  if(saving)return;
  const id=form.dataset.id;
- const client=data.clients.find(c=>c.id===id);
+ const client=customers().find(c=>c.id===id);
  if(!client)return;
  const values=new FormData(form);
  const overrides={status:String(values.get("status")),priority:String(values.get("priority")),next_contact_on:String(values.get("contact"))||null,notes:String(values.get("notes")||"")};
