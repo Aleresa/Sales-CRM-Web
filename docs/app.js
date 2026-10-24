@@ -640,7 +640,7 @@ function openClient(id){
       +'<option value="">Выбери группу клиентов…</option>'
       +groups().map(g=>'<option value="'+attr(g.id)+'">'+h(g.name)+'</option>').join("")
       +'</select><button type="button" class="small-btn" id="assign-client-to-group" data-client-id="'+attr(c.id)+'">＋ Добавить</button></div>'
-      :'<p class="tiny">Сначала создай группу в разделе «Группы клиентов».</p>')+'</div>')
+      :'<p class="tiny">Группы создаются через «Клиенты» → раскрыть «Группы клиентов».</p>')+'</div>')
  +'<button type="button" class="recovery-client-label" data-recovery-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">↗ Разбор закупок и товары для возврата</button>'
  +'<button type="button" class="recovery-client-label" data-insight-open="'+(group?"g:"+attr(group.id):"c:"+attr(id))+'">◈ Остатки и точки роста 2023–2026</button>'
  +'<div class="client-action-danger"><button type="button" data-hide-client="'+attr(c.id)+'">Убрать клиента из CRM</button><small>Пропадёт из рабочих списков и не вернётся после синхронизации. История продаж сохранится.</small></div>'
