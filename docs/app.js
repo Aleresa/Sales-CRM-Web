@@ -115,6 +115,16 @@ function crmVirtualClients(){
    category:"Исторический контрагент",segment:"Из истории 2023–2026",
    priority:"Обычный",status:"К работе",source:"archive",source_note:"Архивные отгрузки 2023–2026"});
  }
+ // Manually added clients have permanent IDs and live in private crm-state.json.
+ for(const record of (Array.isArray(data.crm?.manualClients)?data.crm.manualClients:[])){
+  const key=crmNameKey(record?.name);
+  if(!record?.id||!key||base.has(key))continue;
+  base.add(key);
+  all.push({id:record.id,name:record.name,previous_revenue:0,current_revenue:0,
+   orders_previous:0,orders_current:0,last_order_on:null,category:"Новый клиент",
+   segment:"Добавлен вручную в CRM",priority:"Обычный",status:"К работе",
+   source:"manual",source_note:"Ожидает сопоставления с МойСклад по названию",...record});
+ }
  const synced=typeof msSync!=="undefined"&&Array.isArray(msSync?.counterparties)?msSync.counterparties:
   // Compatibility until updated importer is copied to Apps Script once.
   typeof msSync!=="undefined"&&Array.isArray(msSync?.salesByClient)
@@ -123,7 +133,11 @@ function crmVirtualClients(){
   if(!Array.isArray(record)||record.length<2)continue;
   const msId=String(record[0]||"").trim(),name=String(record[1]||"").trim();
   const key=crmNameKey(name);
-  if(!msId||!key||base.has(key))continue;
+  if(!msId||!key)continue;
+  // Match same-named MoySklad entity to the manual card, preserving the CRM ID.
+  const matched=all.find(c=>c.source==="manual"&&crmNameKey(c.name)===key);
+  if(matched){matched.moysklad_id=msId;matched.source_note="Совпадение с МойСклад по названию";continue;}
+  if(base.has(key))continue;
   base.add(key);
   // Name-based virtual IDs are stable before and after upgrading the importer.
   // Keep the real MoySklad ID as metadata for future matching and renames.
@@ -486,7 +500,8 @@ function renderClients(){
    ?'<button type="button" class="client-clear-filters" data-client-clear>Сбросить фильтры ×</button>':"";
  return header("Клиенты",byGroup
    ?"Один реальный клиент — одна строка. Отгрузки и заказы всех его юрлиц суммируются."
-   :"Все юридические лица по отдельности. В колонке «Группа» видно, кому они принадлежат.")
+   :"Все юридические лица по отдельности. В колонке «Группа» видно, кому они принадлежат.",
+   '<button type="button" class="primary" data-new-client>＋ Новый клиент</button>')
  +'<div class="client-list-top">'+controls+'<span class="tiny">'+fmt(count)+' реальных клиентов = '+fmt(universe.groupCount)+' групп + '+fmt(universe.separateCount)+' без группы · '+fmt(customers().length)+' юрлиц</span></div>'
  +searchToolbar(byGroup?"Поиск клиента или любого его юрлица…":"Поиск юрлица, группы, категории…")
  +'<div class="client-filter-bar"><label>Статус<select data-client-filter="status" aria-label="Фильтр по статусу">'+statusOptions+'</select></label>'
@@ -598,7 +613,7 @@ function renderTasks(){
 }
 function render(){
  clearNotice();document.getElementById("breadcrumb").textContent=({overview:"Обзор",clients:"Клиенты",groups:"Группы клиентов",products:"Товары",categories:"Категории",tasks:"Задачи",recovery:"Возврат продаж",contact:"План контактов",opportunities:"Остатки и рост",lost:"Потерянные клиенты",integration:"МойСклад · обновление"})[page];
- document.querySelectorAll("#nav button").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
+ document.querySelectorAll("#nav button[data-page]").forEach(el=>el.classList.toggle("active",el.dataset.page===page || (page==="groups"&&el.dataset.page==="clients")));
  const view=({overview:renderOverview,clients:renderClients,groups:renderGroups,products:renderProducts,categories:renderCategories,tasks:renderTasks,recovery:renderRecovery,contact:renderContactQueue,opportunities:displayStockOpportunities,lost:displayLostClients,integration:renderIntegration})[page];
  try{
   if(typeof view!=="function")throw Error("Страница не загружена. Обнови CRM через Ctrl+F5.");
@@ -632,6 +647,7 @@ function openClient(id){
  +'<div class="stat"><span>Отгрузки 2025</span><b>'+money(c.previous_revenue)+'</b></div><div class="stat"><span>Учтено в 2026</span><b>'+money(known2026)+'</b></div><div class="stat"><span>Изменение</span><b class="'+(delta<0?"loss":"gain")+'">'+money(delta)+'</b></div>'
  +'<div class="stat"><span>Последний заказ</span><b>'+h(dateOut(c.last_order_on))+'</b></div>'
  +'<form id="client-form" data-id="'+attr(id)+'">'
+ +manualClientFields(c)
  +'<label class="field">Статус<select name="status">'+STATUS.map(v=>option(v,c.status)).join("")+'</select></label>'
  +'<label class="field">Приоритет<select name="priority">'+PRIORITIES.map(v=>option(v,c.priority)).join("")+'</select></label>'
  +'<label class="field">Следующий контакт<input name="contact" type="date" value="'+attr(c.next_contact_on||"")+'"></label>'
@@ -684,7 +700,7 @@ async function updateClient(form){
  const overrides={status:String(values.get("status")),priority:String(values.get("priority")),next_contact_on:String(values.get("contact"))||null,notes:String(values.get("notes")||"")};
  saving=true;form.querySelector("button").disabled=true;
  try{
-  data.crm=await writeJson("crm-state",s=>({...s,clientOverrides:{...(s.clientOverrides||{}),[id]:overrides}}),"update client "+id);
+  data.crm=await writeJson("crm-state",s=>patchManualClientState(s,client,id,overrides,values),"update client "+id);
   modal.hidden=true;render();notice("Карточка сохранена в приватном репозитории.");
  }catch(e){alert(e.message);}
  finally{saving=false;form.querySelector("button").disabled=false;}
