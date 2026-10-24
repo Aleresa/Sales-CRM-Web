@@ -239,3 +239,15 @@
 .sync-catalog-status{border:1px solid #47705d;background:#253c34;padding:13px 16px;border-radius:11px;color:#bee8cf;margin:12px 0 20px;font-size:12px;line-height:1.6}
 .sync-catalog-attention{border-color:#806b4e;background:#393025;color:#efddc6}
 .sync-catalog-attention a{color:#ddc7ff;text-decoration:underline}
+
+
+/* Clients have a nested Groups dropdown, instead of a duplicate sidebar item. */
+.nav-clients{display:grid;gap:4px}
+.nav-clients-primary{display:flex;align-items:center;gap:3px}
+.nav .nav-clients-primary>button[data-page="clients"]{width:auto;flex:1;min-width:0}
+.nav .nav-clients-primary>.nav-chevron{flex:0 0 32px;width:32px;justify-content:center;padding:10px 7px;font-size:17px;color:#cbb6e4;transition:transform .15s}
+.nav .nav-clients-primary>.nav-chevron.expanded{transform:rotate(180deg)}
+.nav-clients-submenu{padding-left:14px;margin-top:2px;display:grid;gap:3px}
+.nav .nav-clients-submenu button{padding:9px 13px;font-size:12px;font-weight:600;color:#b3a1c7}
+.nav .nav-clients-submenu button.active{color:#e6d3ff;background:#352647;border-left:2px solid var(--purple)}
+.client-manual-note{font-size:11px;padding:11px 13px;margin-top:17px;border:1px solid #514269;border-radius:10px;background:#29203c;color:#d9c4ee}
