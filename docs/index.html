@@ -9,13 +9,14 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.github.com; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none';">
   <title>Sales CRM · Личная аналитика</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="site.css?v=20261024-groups-kpi-1">
-  <script defer src="app.js?v=20261024-groups-kpi-1"></script>
-  <script defer src="groups.js?v=20261024-groups-kpi-1"></script>
-  <script defer src="recovery.js?v=20261024-groups-kpi-1"></script>
-  <script defer src="insights.js?v=20261024-groups-kpi-1"></script>
-  <script defer src="comparison.js?v=20261024-groups-kpi-1"></script>
-  <script defer src="integration.js?v=20261024-groups-kpi-1"></script>
+  <link rel="stylesheet" href="site.css?v=20261024-manual-clients-1">
+  <script defer src="app.js?v=20261024-manual-clients-1"></script>
+  <script defer src="manual-clients.js?v=20261024-manual-clients-1"></script>
+  <script defer src="groups.js?v=20261024-manual-clients-1"></script>
+  <script defer src="recovery.js?v=20261024-manual-clients-1"></script>
+  <script defer src="insights.js?v=20261024-manual-clients-1"></script>
+  <script defer src="comparison.js?v=20261024-manual-clients-1"></script>
+  <script defer src="integration.js?v=20261024-manual-clients-1"></script>
 </head>
 <body>
   <div id="auth" class="auth-overlay">
@@ -40,8 +41,15 @@
       <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
       <nav id="nav" class="nav" aria-label="Навигация">
         <button data-page="overview" class="active">◫ <span>Обзор</span></button>
-        <button data-page="clients">♧ <span>Клиенты</span></button>
-        <button data-page="groups">♧ <span>Группы клиентов</span></button>
+        <div class="nav-clients">
+          <div class="nav-clients-primary">
+            <button data-page="clients">♧ <span>Клиенты</span></button>
+            <button id="clients-menu-toggle" class="nav-chevron" type="button" aria-label="Показать группы клиентов" aria-expanded="false" aria-controls="clients-nav-submenu">⌄</button>
+          </div>
+          <div id="clients-nav-submenu" class="nav-clients-submenu" hidden>
+            <button data-page="groups">↳ <span>Группы клиентов</span></button>
+          </div>
+        </div>
         <button data-page="products">▤ <span>Товары / SKU</span></button>
         <button data-page="categories">▥ <span>Категории</span></button>
         <button data-page="tasks">☷ <span>Задачи</span></button>
